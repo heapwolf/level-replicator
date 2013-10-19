@@ -1,0 +1,27 @@
+{
+  "name": "level-replicator",
+  "version": "0.1.0",
+  "description": "leveldb strong and eventual master-master replication",
+  "main": "index.js",
+  "bin": "./bin/server.js",
+  "scripts": {
+    "test": "node ./test/test.js"
+  },
+  "keywords": [
+    "eventual",
+    "strong",
+    "replication"
+  ],
+  "author": "hij1nx",
+  "license": "MIT",
+  "dependencies": {
+    "level": "~0.12.0",
+    "multilevel": "~5.3.2",
+    "level-hooks": "~4.4.3",
+    "monotonic-timestamp": "0.0.8"
+  },
+  "devDependencies": {
+    "tap": "~0.4.4",
+    "rimraf": "~2.2.2"
+  }
+}
