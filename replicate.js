@@ -63,6 +63,7 @@ module.exports = function(localdb, rs, ee, config) {
     }
 
     var lastRecord
+
     rs.createReadStream({
       reverse: true,
       values: false,
