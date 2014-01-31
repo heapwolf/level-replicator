@@ -5,7 +5,7 @@
   "main": "index.js",
   "bin": "./bin/server.js",
   "scripts": {
-    "test": "mocha --recursive test --bail --colors --reporter spec --debug --timeout 5000"
+    "test": "mocha --recursive test --bail --colors --reporter spec --debug --timeout 8000"
   },
   "keywords": [
     "eventual",
