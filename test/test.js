@@ -254,9 +254,9 @@ describe('sanity tests', function () {
     function close(t) {
       if (++counter == 2) {
         rmrf(datadir, function() {
-          rmrf(pemsdir, function() {
+         rmrf(pemsdir, function() {
             done()
-          })
+         })
         })
       }
     }
@@ -267,30 +267,30 @@ describe('sanity tests', function () {
       db[2].put('testkey2', 'testvalue2', function(err) { ASSERT(!err) })
     }, 500)
 
-    setTimeout(after1, 2000)
+    setTimeout(after1, 1000)
 
     function after1() {
 
       db[1].get('testkey1', function(err, value) {
         ASSERT(value, 'key found in database db1')
 
-        setTimeout(after2, 1000)
+        setTimeout(after2, 500)
       })
     }
 
     function after2() {
 
-      db[0].get('testkey2', function(err, value) {
-        ASSERT(value == undefined, 'testkey2 was not found in database db0')
+      db[0].get('testkey2', function(err, value1) {
+        ASSERT(value1 == undefined, 'testkey2 was not found in database db0')
 
-        db[1].get('testkey2', function(err, value) {
-          ASSERT(value == undefined, 'testkey2 key was not found in database db1')
+        db[1].get('testkey2', function(err, value2) {
+          ASSERT(value2 == undefined, 'testkey2 key was not found in database db1')
 
-          db[2].get('testkey0', function(err, value) {
-            ASSERT(value == undefined, 'testkey0 was not found in database db2')
+          db[2].get('testkey0', function(err, value3) {
+            ASSERT(value3 == undefined, 'testkey0 was not found in database db2')
 
-            db[2].get('testkey1', function(err, value) {
-              ASSERT(value == undefined, 'testkey1 was not found in database db2')
+            db[2].get('testkey1', function(err, value4) {
+              ASSERT(value4 == undefined, 'testkey1 was not found in database db2')
 
               r1.close()
               r2.close()
