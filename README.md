@@ -1,3 +1,6 @@
+
+![img](/replicator.png)
+
 # SYNOPSIS
 A simple eventually consistent master-master replication module 
 for leveldb.
@@ -92,7 +95,7 @@ var config = {
     "127.0.0.1:8000": {},
     "127.0.0.1:8001": {} 
   },
-  port: 8002 // port for this server
+  port: 8002
 }
 
 var db = level('/tmp/db')
