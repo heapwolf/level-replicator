@@ -5,6 +5,9 @@
 A simple eventually consistent master-master replication module 
 for leveldb.
 
+# BUILD STATUS
+[![build-status](https://www.codeship.io/projects/0d604520-6cc1-0131-203c-22ccfa4c21c9/status)](https://www.codeship.io/projects/13128)
+
 ## METHOD
 ### Change Logs
 Each database maintains a `CHANGE LOG` in a separate level instance. 
