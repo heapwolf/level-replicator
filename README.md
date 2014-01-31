@@ -42,9 +42,9 @@ var config = {
 }
 
 var db = level('/tmp/db') // create a datbase to replicate
-var rs = level('/tmp/rs') // create a replication record set
+var cl = level('/tmp/cl') // create a change log database
 
-lrep.install(db, rs, config)
+lrep.install(db, cl, config)
 
 // put something into the database
 db.put('some-key', 'some-value', function(err) {
@@ -66,9 +66,9 @@ var config = {
 }
 
 var db = level('/tmp/db')
-var rs = level('/tmp/rs')
+var cl = level('/tmp/cl')
 
-lrep.install(db, rs, config)
+lrep.install(db, cl, config)
 
 db.put('some-key', 'some-value', function(err) {
 })
@@ -89,9 +89,9 @@ var config = {
 }
 
 var db = level('/tmp/db')
-var rs = level('/tmp/rs')
+var cl = level('/tmp/cl')
 
-lrep.install(db, rs, config)
+lrep.install(db, cl, config)
 
 db.put('some-key', 'some-value', function(err) {
 })
