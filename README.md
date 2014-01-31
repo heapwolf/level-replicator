@@ -18,17 +18,17 @@ and a value that was the operation, for example...
 ![img](/closeup.png)
 
 A replicating database will query a remote database's change log in reverse 
-until it finds either a matching entry in its own replication set or the 
-first key in the remote server's replication set.
+until it finds either a matching key in its own change log or the first key 
+in the remote server's change log.
 
 ![img](/faraway.png)
 
-## OPTIMIZATIONS
+### Optimizations
 Keeping a changes log and applying the changes in reverse means the latest
 changes will be applied to the appropriate key values. If there is more than
 one operation against a key,
 
-  1. the change entry is removed by the server or 
+  1. the change entry is removed by the server (*Not yet implemented*) or
   2. it is ignored by the client.
 
 The changes log can be truncated over time to save disk space.
