@@ -6,7 +6,14 @@ for leveldb.
 ### Change Logs
 Each database maintains a `CHANGE LOG` in a separate level instance. 
 Each entry in the change log has a key that is a monotonic timestamp
-and a value that was the operation (`{ "type": "put", "value": "foo" }`).
+and a value that was the operation, for example...
+
+```
+{ 
+  "key": "1391172544446.001",
+  "value": { "type": "put", "value": "some-random-key-name" }
+}
+```
 
 ![img](/closeup.png)
 
