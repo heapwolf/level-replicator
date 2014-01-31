@@ -1,7 +1,10 @@
 var net = require('net')
 var multilevel = require('multilevel')
+var secure = require('secure-peer')
 
-module.exports = function(localdb, rs, ee, config) {
+var securepeer
+
+module.exports = function(localdb, changes, ee, config) {
 
   var connections = config.connections || {}
 
@@ -10,69 +13,119 @@ module.exports = function(localdb, rs, ee, config) {
 
   var remotedb = multilevel.client({
     "methods": {
+      "createReadStream": { "type": "readable" },
       "fetch": { "type": "async" }
     }
   })
 
+  if (config.pems) {
+    var pems = require(config.pems)
+    config.public = pems.public
+    securepeer = secure(pems)
+  }
+
   function connect(host, port) {
 
-    var stream = net.connect(port, host, function() {
-      ee.emit('connect', config.servers[[host, port].join(':')])
+    var rawStream = net.connect(port, host, function() {
+      ee.emit('connect')
     })
 
-    stream.on('error', function(err) {
+    rawStream.on('error', function(err) {
       ee.emit('error', err)
-      stream.end()
+      rawStream.end()
     })
 
-    stream.pipe(remotedb.createRpcStream()).pipe(stream)
+    if (securepeer && config.pems) {
+      var sec = securepeer(function (stream) {
+        replicate(stream)
+      })
 
-    if (connections.tmax) {
-      setTimeout(function() {
-        ee.emit('timeout')
-        stream.end()
-      }, connections.tmax)
+      sec.pipe(rawStream).pipe(sec)
+
+      sec.on('identify', function(id) {
+        id.accept()
+      })
+    }
+    else {
+      replicate(rawStream)
     }
 
-    function pull(lastRecord) {
+    function replicate(stream) {
 
-      var opts = {
-        reverse: true,
-        keys: false
+      stream.pipe(remotedb.createRpcStream()).pipe(stream)
+
+      if (connections.tmax) {
+        setTimeout(function() {
+          ee.emit('timeout')
+          stream.end()
+        }, connections.tmax)
       }
 
-      if (lastRecord) {
-        opts.end = lastRecord + '~'
-      }
+      function pull(lastRecord) {
 
-      remotedb
-        .createReadStream(opts)
-        .on('data', function(r) {
-          if (r.type == 'put') {
-            remotedb.fetch(r.key, function(err, val) {
-              if (!err) {
-                localdb.put(r.key, val, function(err) {
+        var opts = {
+          reverse: true,
+          keys: false
+        }
+
+        if (lastRecord) {
+          opts.end = lastRecord + '~'
+        }
+
+        var uniques = {}
+        var ops = []
+        var waiting = 0
+        var wait
+
+        remotedb
+          .createReadStream(opts)
+          .on('data', function(r) {
+            if (!uniques[r.key]) {
+              if (r.type == 'put') {
+                waiting++
+                remotedb.fetch(r.key, function(err, val) {
+                  if (err) return ee.emit('error', err)
+                  ops.push({ type: 'put', key: r.key, value: val })
+                  waiting--
                 })
               }
-            })
-          }
-          else if (r.type == 'del') {
-            localdb.del(r.key)
-          }
-        })
+              else if (r.type == 'del') {
+                ops.push({ type: 'del', key: r.key })
+              }
+            }
+          })
+          .on('end', function() {
+            if (waiting > 0) {
+              wait = setInterval(function() {
+                if (waiting == 0) {
+                  clearInterval(wait)
+                  localdb.batch(ops, function(err) {
+                    if (err) return ee.emit('error', err)
+                    ops.length = 0
+                  })
+                }
+              }, 64)
+            }
+          })
+      }
+
+      var lastRecord
+
+      changes.createReadStream({
+        reverse: true,
+        values: false,
+        limit: 1
+      })
+      .on('error', function(err) {
+        ee.emit('error', err)
+      })
+      .on('data', function (r) {
+        lastRecord = r
+      })
+      .on('end', function() {
+        pull(lastRecord)
+      })
     }
-
-    var lastRecord
-
-    rs.createReadStream({
-      reverse: true,
-      values: false,
-      limit: 1
-    }).on('data', function (r) {
-      lastRecord = r
-    }).on('end', function() {
-      pull(lastRecord)
-    })
   }
 
   function randomServer() {
@@ -81,7 +134,7 @@ module.exports = function(localdb, rs, ee, config) {
     return servers[Math.floor(r)]
   }
 
-  setInterval(function() {
+  var interval = setInterval(function() {
 
     var server
 
@@ -99,5 +152,7 @@ module.exports = function(localdb, rs, ee, config) {
       connect(host, port)
     }
   }, connections.interval)
+
+  return interval
 }
 
