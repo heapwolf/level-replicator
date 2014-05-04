@@ -15,7 +15,7 @@
   "author": "hij1nx",
   "license": "MIT",
   "dependencies": {
-    "level": "~0.12.0",
+    "level": "0.18.0",
     "multilevel": "~5.5.0",
     "level-hooks": "~4.4.3",
     "monotonic-timestamp": "0.0.8",
