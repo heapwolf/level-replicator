@@ -23,16 +23,16 @@ describe('Replicator', function () {
     })
 
     it('initializes with a callback', function(done) {
-      replicate.install(db, repDB, {listen:'skip'}, function(er, server, changes) {
-        assert.ok(!er, 'No problem initializing replication')
-        assert.ok(changes, 'Changes DB is passed through the callback')
+      var server = replicate.install(db, repDB, {listen:'skip'})
+      server.on('ready', function(changesDB) {
+        assert.ok(changesDB, 'Changes DB is passed through the callback')
         done()
       })
     })
 
     it('sets its version', function(done) {
-      replicate.install(db, repDB, {listen:'skip'}, function(er) {
-        if (er) throw er
+      var server = replicate.install(db, repDB, {listen:'skip'})
+      server.on('ready', function(changesDB) {
         repDB.get('version', function(er, res) {
           if (er) throw er
           assert.equal(res, require('../package.json').version, 'Package version is in the changes DB')
@@ -40,5 +40,5 @@ describe('Replicator', function () {
         })
       })
     })
-  })
+  }) // DB
 })

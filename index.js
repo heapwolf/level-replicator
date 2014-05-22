@@ -13,8 +13,7 @@ var replicate = require('./replicate')
 var PACKAGE = require('./package.json')
 var securepeer
 
-function server(db, repDB, config, callback) {
-  callback = callback || function() {}
+function server(db, repDB, config) {
 
   config = config || {}
   config.sep = config.sep || db.sep || '\xff'
@@ -105,11 +104,11 @@ function server(db, repDB, config, callback) {
       return ee.emit('error', er)
 
     if (config.listen == 'skip')
-      callback(null, server, changes)
+      server.emit('ready', changes)
     else
       server.listen(config.port || 8000, function() {
         ee.emit('listening', config.port || 8000)
-        callback(null, server, changes)
+        server.emit('ready', changes)
       })
   })
 
