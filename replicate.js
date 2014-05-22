@@ -2,6 +2,8 @@ var net = require('net')
 var multilevel = require('multilevel')
 var secure = require('secure-peer')
 
+var PACKAGE = require('./package.json')
+
 var securepeer
 
 module.exports = function(localdb, changes, ee, config) {
@@ -14,6 +16,7 @@ module.exports = function(localdb, changes, ee, config) {
   var remotedb = multilevel.client({
     "methods": {
       "createReadStream": { "type": "readable" },
+      "version": { "type": "async" },
       "fetch": { "type": "async" }
     }
   })
@@ -109,22 +112,39 @@ module.exports = function(localdb, changes, ee, config) {
           })
       }
 
-      var lastRecord
+      // Check for version compatibility.
+      remotedb.version(function(er, remoteVersion) {
+        if (er)
+          return ee.emit('error', er)
 
-      changes.createReadStream({
-        reverse: true,
-        values: false,
-        limit: 1
+        // TODO: For versions 0.x.x, any mismatch should trigger a failure. For versions 1.x.x or greater, any semver match
+        // should work (e.g. 1.0.0 works with 1.99.99 but not 2.0.0.
+        if (remoteVersion == PACKAGE.version)
+          ee.emit('compatible', remoteVersion)
+        else
+          return ee.emit('error', new Error('Version mismatch; server='+remoteVersion+' local='+PACKAGE.version))
+
+        pullFromLastRecord()
       })
-      .on('error', function(err) {
-        ee.emit('error', err)
-      })
-      .on('data', function (r) {
-        lastRecord = r
-      })
-      .on('end', function() {
-        pull(lastRecord)
-      })
+
+      function pullFromLastRecord() {
+        var lastRecord
+
+        changes.createReadStream({
+          reverse: true,
+          values: false,
+          limit: 1
+        })
+        .on('error', function(err) {
+          ee.emit('error', err)
+        })
+        .on('data', function (r) {
+          lastRecord = r
+        })
+        .on('end', function() {
+          pull(lastRecord)
+        })
+      }
     }
   }
 

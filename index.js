@@ -34,6 +34,10 @@ function server(db, repDB, config) {
     server.emit('error', err)
   })
 
+  ee.on('compatible', function(version) {
+    server.emit('compatible', version)
+  })
+
   repDB = repDB || level(
     path.join(__dirname, 'replication-set'), 
     { valueEncoding: 'json' }
@@ -50,11 +54,20 @@ function server(db, repDB, config) {
 
   changes.methods = db.methods || {}
   changes.methods['fetch'] = { type: 'async' }
+  changes.methods['version'] = { type: 'async' }
   changes.methods['createReadStream'] = { type: 'readable' }
 
   changes.fetch = function(key, cb) {
     db.get(key, cb)
     ee.emit('fetch', key)
+  }
+
+  changes.version = function(cb) {
+    repDB.get('version', function(er, version) {
+      if (er)
+        return ee.emit('error', er)
+      cb(null, version)
+    })
   }
 
   config.access = config.access || function() {
