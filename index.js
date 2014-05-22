@@ -3,15 +3,18 @@ var net = require('net')
 var EventEmitter = require('events').EventEmitter
 
 var level = require('level')
+var sublevel = require('level-sublevel')
 var multilevel = require('multilevel')
 var hooks = require('level-hooks')
 var mts = require('monotonic-timestamp')
 var secure = require('secure-peer')
 
 var replicate = require('./replicate')
+var PACKAGE = require('./package.json')
 var securepeer
 
-function server(db, changes, config) {
+function server(db, repDB, config, callback) {
+  callback = callback || function() {}
 
   config = config || {}
   config.sep = config.sep || db.sep || '\xff'
@@ -32,10 +35,13 @@ function server(db, changes, config) {
     server.emit('error', err)
   })
 
-  changes = changes || level(
+  repDB = repDB || level(
     path.join(__dirname, 'replication-set'), 
     { valueEncoding: 'json' }
   )
+
+  repDB = sublevel(repDB)
+  var changes = repDB.sublevel('changes')
 
   hooks(db)
 
@@ -82,20 +88,29 @@ function server(db, changes, config) {
 
   })
 
-  if (! config.no_server)
-    server.listen(config.port || 8000, function() {
-      ee.emit('listening', config.port || 8000)
-    })
-
   var replicator = replicate(db, changes, ee, config)
 
   server.on('close', function() {
     clearInterval(replicator)
     db.close(function() {
-      changes.close(function() {
+      repDB.close(function() {
         server.emit('closed')
       })
     })
+  })
+
+  // Initialize the changes database structure.
+  repDB.put('version', PACKAGE.version, function(er) {
+    if(er)
+      return ee.emit('error', er)
+
+    if (config.listen == 'skip')
+      callback(null, server, changes)
+    else
+      server.listen(config.port || 8000, function() {
+        ee.emit('listening', config.port || 8000)
+        callback(null, server, changes)
+      })
   })
 
   return server

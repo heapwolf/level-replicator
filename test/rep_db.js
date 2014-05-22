@@ -20,6 +20,22 @@ describe('Replicator DB', function () {
       done()
     })
   })
+
+  it('initializes with a callback', function(done) {
+    replicate.install(db, repDB, {listen:'skip'}, function(er, server, changes) {
+      assert.ok(!er, 'No problem initializing replication')
+      assert.ok(changes, 'Changes DB is passed through the callback')
+      done()
+    })
+  })
+
+  it('sets its version', function(done) {
+    repDB.get('version', function(er, res) {
+      if (er) throw er
+      assert.equal(res, require('../package.json').version, 'Package version is in the changes DB')
+      done()
+    })
+  })
 })
 
 // Utility function for debugging
