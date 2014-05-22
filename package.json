@@ -24,9 +24,11 @@
     "secure-peer": "~0.2.1"
   },
   "devDependencies": {
+    "levelup": "^0.18.3",
+    "memdown": "^0.10.0",
+    "mocha": "~1.17.1",
     "rimraf": "~2.2.2",
-    "selfsigned": "~1.2.0",
-    "mocha": "~1.17.1"
+    "selfsigned": "~1.2.0"
   },
   "directories": {
     "test": "test"
