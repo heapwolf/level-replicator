@@ -6,8 +6,8 @@ var replicate = require('../')
 describe('Replicator', function () {
   var db, repDB
   beforeEach(function(done) {
-    db = levelup('db', {db:memdown})     ; assert.ok(db, 'Make a data DB')  ;
-    repDB = levelup('rep', {db:memdown}) ; assert.ok(repDB, 'Make a replication DB')
+    db = mkdb('db')
+    repDB = mkdb('rep')
     done()
   })
 
@@ -42,3 +42,10 @@ describe('Replicator', function () {
     })
   }) // DB
 })
+
+function mkdb(name) {
+  name = name || 'db'
+  var db = levelup(name, {db:memdown})
+  assert.ok(db, 'Make a db: ' + name)
+  return db
+}
