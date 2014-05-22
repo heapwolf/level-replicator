@@ -129,7 +129,7 @@ module.exports = function(localdb, changes, ee, config) {
   }
 
   function randomServer() {
-    var servers = Object.keys(config.servers)
+    var servers = Object.keys(config.servers || {})
     var r = Math.random()*servers.length
     return servers[Math.floor(r)]
   }

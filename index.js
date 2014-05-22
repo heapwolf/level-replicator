@@ -80,9 +80,12 @@ function server(db, changes, config) {
       con.pipe(multilevel.server(changes, config)).pipe(con)
     }
 
-  }).listen(config.port || 8000, function() {
-    ee.emit('listening', config.port || 8000)
   })
+
+  if (! config.no_server)
+    server.listen(config.port || 8000, function() {
+      ee.emit('listening', config.port || 8000)
+    })
 
   var replicator = replicate(db, changes, ee, config)
 
