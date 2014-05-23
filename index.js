@@ -59,7 +59,12 @@ function server(db, repDB, config) {
   var changes = repDB.sublevel('changes')
 
   function log_change(change, add) {
-    changes.put(mts(), {type:change.type, key:change.key})
+    changes.put(mts(), {type:change.type, key:change.key}, function (er) {
+      if (er)
+        server.emit('error', er)
+      else
+        server.emit('change', change)
+    })
   }
 
   function add_change(change, add) {

@@ -44,7 +44,8 @@ describe('Replicator', function () {
 
   describe('server', function() {
     var repDB1 = mkdb('rep1')
-    var server1 = replicate.server(mkdb('db1'), repDB1, {port:8000, servers:{}})
+    var db1 = mkdb('db1')
+    var server1 = replicate.server(db1, repDB1, {port:8000, servers:{}})
 
     it('works if versions match', function(done) {
       var server2 = replicate.server(mkdb(), mkdb(), {listen:'skip', servers:{'127.0.0.1:8000':{}}})
@@ -64,6 +65,16 @@ describe('Replicator', function () {
           server2.emit('close')
           done()
         })
+      })
+    })
+
+    it('emits a "change" event', function(done) {
+      db1.put('foo', 'bar')
+      server1.on('change', function(change) {
+        assert.equal(change.type , 'put')
+        assert.equal(change.key  , 'foo')
+        assert.equal(change.value, 'bar')
+        done()
       })
     })
   })
