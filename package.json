@@ -1,9 +1,11 @@
 {
   "name": "level-replicator",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "leveldb strong and eventual master-master replication",
   "main": "index.js",
-  "bin": "./bin/server.js",
+  "bin": {
+    "level-replicator": "./bin/server.js"
+  },
   "scripts": {
     "test": "mocha --recursive test --bail --colors --reporter spec --debug --timeout 8000"
   },
@@ -16,14 +18,28 @@
   "license": "MIT",
   "dependencies": {
     "level": "0.18.0",
-    "multilevel": "~5.5.0",
     "level-hooks": "~4.4.3",
+    "level-sublevel": "^5.2.0",
     "monotonic-timestamp": "0.0.8",
+    "multilevel": "~5.5.0",
     "secure-peer": "~0.2.1"
   },
   "devDependencies": {
+    "levelup": "^0.18.3",
+    "memdown": "^0.10.0",
+    "mocha": "~1.17.1",
     "rimraf": "~2.2.2",
-    "selfsigned": "~1.2.0",
-    "mocha": "~1.17.1"
-  }
+    "selfsigned": "~1.2.0"
+  },
+  "directories": {
+    "test": "test"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git://github.com/hij1nx/level-replicator.git"
+  },
+  "bugs": {
+    "url": "https://github.com/hij1nx/level-replicator/issues"
+  },
+  "homepage": "https://github.com/hij1nx/level-replicator"
 }
