@@ -1,4 +1,18 @@
 module.exports = dir
+module.exports.mkdb = mkdb
+
+
+var assert = require('assert')
+var levelup = require('levelup')
+var memdown = require('memdown')
+
+
+function mkdb(name) {
+  name = name || 'db'
+  var db = levelup(name, {db:memdown})
+  assert.ok(db, 'Make a db: ' + name)
+  return db
+}
 
 // Utility function for debugging
 function dir(db, name) {

@@ -1,7 +1,7 @@
+var mkdb = require('./misc').mkdb
 var assert = require('assert')
-var levelup = require('levelup')
-var memdown = require('memdown')
 var replicate = require('../')
+
 
 describe('Replicator', function () {
   var db, repDB
@@ -68,10 +68,3 @@ describe('Replicator', function () {
     })
   })
 })
-
-function mkdb(name) {
-  name = name || 'db'
-  var db = levelup(name, {db:memdown})
-  assert.ok(db, 'Make a db: ' + name)
-  return db
-}
