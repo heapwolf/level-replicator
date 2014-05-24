@@ -68,7 +68,7 @@ function server(db, repDB, config) {
   }
 
   function add_change(change, add) {
-    throw new Error('Sublevels not implemented')
+    add({type:'put', key:mts(), value:{type:change.type, key:change.key}, valueEncoding:'json'}, changes)
   }
 
   changes.methods = db.methods || {}
