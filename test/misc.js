@@ -24,7 +24,7 @@ function dir(db, name) {
   .on('end', function() {
     console.log('=-=-=-=-= %s', name)
     for (var i = 0; i < results.length; i++)
-      console.log('%s = %j', results[i].key, results[i].value)
+      console.log('%s = %s', results[i].key, results[i].value)
     console.log('=-=-=-=-=')
   })
 }
