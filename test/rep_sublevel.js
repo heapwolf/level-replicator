@@ -64,6 +64,44 @@ describe('Replicator sublevel', function () {
   })
 
   describe('server', function() {
+    it('emits a "change" event for put()', function(end) {
+      db.put('my hope', 'replicator is a sublevel now')
+      srv.once('change', function(change) {
+        assert.equal(change.type , 'put')
+        assert.equal(change.key  , 'my hope')
+        assert.equal(change.value, 'replicator is a sublevel now')
+        end()
+      })
+    })
+
+    it('emits a "change" event for del()', function(end) {
+      db.del('dashed hope')
+      srv.once('change', function(change) {
+        assert.equal(change.type , 'del')
+        assert.equal(change.key  , 'dashed hope')
+        end()
+      })
+    })
+
+    it('emits a "change" event for batch()', function(end) {
+      var hits = 0
+
+      db.batch([{type:'put', key:'put-batch', value:1}, {type:'del', key:'del-batch'}])
+      srv.on('change', check_batch)
+
+      function check_batch(change) {
+        if (change.type === 'put' && change.key === 'put-batch' && change.value === 1)
+          hits += 1
+        if (change.type === 'del' && change.key === 'del-batch')
+          hits += 1
+
+        if (hits == 2) {
+          srv.removeListener('change', check_batch)
+          end()
+        }
+      }
+    })
+
     it('replicates just like normal', function(end) {
       var server2 = replicate.server(mkdb(), mkdb(), {listen:'skip', servers:{'127.0.0.1:8000':{}}})
       server2.on('change', check_change)

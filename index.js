@@ -69,6 +69,7 @@ function server(db, repDB, config) {
 
   function add_change(change, add) {
     add({type:'put', key:mts(), value:{type:change.type, key:change.key}, valueEncoding:'json'}, changes)
+    setImmediate(function() { server.emit('change', change) })
   }
 
   changes.methods = db.methods || {}
