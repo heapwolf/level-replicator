@@ -56,7 +56,7 @@ function server(db, repDB, config) {
     db.hooks.post(log_change)
   }
 
-  var changes = repDB.sublevel('changes')
+  var changes = repDB.sublevel('changes', {valueEncoding:'json'})
 
   function log_change(change, add) {
     changes.put(mts(), {type:change.type, key:change.key}, function (er) {
