@@ -46,6 +46,7 @@ describe('Replicator', function () {
     var repDB1 = mkdb('rep1')
     var db1 = mkdb('db1')
     var server1 = replicate.server(db1, repDB1, {port:8000, servers:{}})
+    after(function() { server1.close() })
 
     it('works if versions match', function(done) {
       var server2 = replicate.server(mkdb(), mkdb(), {listen:'skip', servers:{'127.0.0.1:8000':{}}})

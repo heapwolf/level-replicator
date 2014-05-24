@@ -6,6 +6,7 @@ var replicate = require('../')
 describe('Replicator sublevel', function () {
   var db = mkdb('db')
   var srv, changes_db
+  after(function() { if (srv) srv.close() })
 
   describe('database', function() {
     it('allows a "sublevel" parameter', function(end) {
