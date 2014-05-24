@@ -151,7 +151,7 @@ function server(db, repDB, config) {
 // Return a checker for all keys NOT within this sublevel.
 function anti_checker(db) {
   var min = db.prefix()
-  var max = min + db.options.sep
+  var max = min + db.options.sep + db.options.sep // This may be slighly wrong but as long as keys do not start with \xff it's ok.
   var checker = stringRange.checker({'min':min, 'max':max})
 
   return function not_in_range(key) {
