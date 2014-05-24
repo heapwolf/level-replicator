@@ -1,5 +1,5 @@
-module.exports = dir
-module.exports.mkdb = mkdb
+exports.dir = dir
+exports.mkdb = mkdb
 
 
 var assert = require('assert')
