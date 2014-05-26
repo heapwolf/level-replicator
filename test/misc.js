@@ -1,4 +1,18 @@
-module.exports = dir
+exports.dir = dir
+exports.mkdb = mkdb
+
+
+var assert = require('assert')
+var levelup = require('levelup')
+var memdown = require('memdown')
+
+
+function mkdb(name) {
+  name = name || 'db'
+  var db = levelup(name, {db:memdown})
+  assert.ok(db, 'Make a db: ' + name)
+  return db
+}
 
 // Utility function for debugging
 function dir(db, name) {
@@ -10,7 +24,7 @@ function dir(db, name) {
   .on('end', function() {
     console.log('=-=-=-=-= %s', name)
     for (var i = 0; i < results.length; i++)
-      console.log('%s = %j', results[i].key, results[i].value)
+      console.log('%s = %s', results[i].key, results[i].value)
     console.log('=-=-=-=-=')
   })
 }

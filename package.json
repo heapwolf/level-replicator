@@ -22,7 +22,8 @@
     "level-sublevel": "^5.2.0",
     "monotonic-timestamp": "0.0.8",
     "multilevel": "~5.5.0",
-    "secure-peer": "~0.2.1"
+    "secure-peer": "~0.2.1",
+    "string-range": "^1.2.2"
   },
   "devDependencies": {
     "levelup": "^0.18.3",

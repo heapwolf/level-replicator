@@ -5,6 +5,7 @@ var EventEmitter = require('events').EventEmitter
 var level = require('level')
 var sublevel = require('level-sublevel')
 var multilevel = require('multilevel')
+var stringRange = require('string-range')
 var hooks = require('level-hooks')
 var mts = require('monotonic-timestamp')
 var secure = require('secure-peer')
@@ -14,7 +15,6 @@ var PACKAGE = require('./package.json')
 var securepeer
 
 function server(db, repDB, config) {
-
   config = config || {}
   config.sep = config.sep || db.sep || '\xff'
 
@@ -38,19 +38,39 @@ function server(db, repDB, config) {
     server.emit('compatible', version)
   })
 
-  repDB = repDB || level(
-    path.join(__dirname, 'replication-set'), 
-    { valueEncoding: 'json' }
-  )
-
-  repDB = sublevel(repDB)
-  var changes = repDB.sublevel('changes')
-
   hooks(db)
 
-  db.hooks.post(function (change, add) {
-    changes.put(mts(), { type: change.type, key: change.key })
-  })
+  if (repDB == 'sublevel') {
+    // Use a sublevel for replication. This is more robust but requires other clients and code to be aware.
+    db = sublevel(db)
+    repDB = db.sublevel('_replicator')
+    var not_my_key = anti_checker(repDB)
+    db.hooks.pre(not_my_key, add_change)
+  } else {
+    // Use a separate database for replication. This works for any db and code, but can lead to data loss since the replication
+    // log is not committed to disk in a transaction with the database changes. This could one day move to a journaling format,
+    // with keys and values committed to the log first, then "confirmed" after the write succeeds. When starting up, replay
+    // uncommitted journal entries in order.
+    repDB = repDB || level(path.join(__dirname, 'replication-set'), { valueEncoding: 'json' })
+    repDB = sublevel(repDB)
+    db.hooks.post(log_change)
+  }
+
+  var changes = repDB.sublevel('changes', {valueEncoding:'json'})
+
+  function log_change(change, add) {
+    changes.put(mts(), {type:change.type, key:change.key}, function (er) {
+      if (er)
+        server.emit('error', er)
+      else
+        server.emit('change', change)
+    })
+  }
+
+  function add_change(change, add) {
+    add({type:'put', key:mts(), value:{type:change.type, key:change.key}, valueEncoding:'json'}, changes)
+    setImmediate(function() { server.emit('change', change) })
+  }
 
   changes.methods = db.methods || {}
   changes.methods['fetch'] = { type: 'async' }
@@ -127,6 +147,19 @@ function server(db, repDB, config) {
 
   return server
 }
+
+
+// Return a checker for all keys NOT within this sublevel.
+function anti_checker(db) {
+  var min = db.prefix()
+  var max = min + db.options.sep + db.options.sep // This may be slighly wrong but as long as keys do not start with \xff it's ok.
+  var checker = stringRange.checker({'min':min, 'max':max})
+
+  return function not_in_range(key) {
+    return ! checker(key)
+  }
+}
+
 
 exports.createServer = server 
 exports.server = server
