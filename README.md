@@ -10,15 +10,16 @@ for leveldb.
 
 ## METHOD
 ### Change Logs
-Each database maintains a `CHANGE LOG` in a separate level instance. 
-Each entry in the change log has a key that is a monotonic timestamp
-and a value that was the operation, for example...
+Each database maintains a `CHANGE LOG` in a separate sub-level.
+Each entry in the change log has a key that matches each key in
+the database appended by a lamport timestamp.
 
 ```
-{ 
-  "key": "1391172544446.001",
-  "value": { "type": "put", "value": "some-random-key-name" }
-}
+some-random-key-name!2342341
+```
+
+```
+put
 ```
 
 ![img](/closeup.png)
@@ -44,7 +45,7 @@ The changes log can be truncated over time to save disk space.
 ### Server 1
 ```js
 var level = require('level')
-var lrep = require('level-replicator')
+var rep = require('level-replicator')
 
 var config = {
   servers: { // list of servers to replicate with
@@ -54,10 +55,7 @@ var config = {
   port: 8000 // port for this server
 }
 
-var db = level('/tmp/db') // create a datbase to replicate
-var cl = level('/tmp/cl') // create a change log database
-
-lrep.install(db, cl, config)
+var db = rep(level('/tmp/db'), config) 
 
 // put something into the database
 db.put('some-key', 'some-value', function(err) {
@@ -78,10 +76,7 @@ var config = {
   port: 8001
 }
 
-var db = level('/tmp/db')
-var cl = level('/tmp/cl')
-
-lrep.install(db, cl, config)
+var db = rep(level('/tmp/db'), config) 
 
 db.put('some-key', 'some-value', function(err) {
 })
@@ -101,10 +96,7 @@ var config = {
   port: 8002
 }
 
-var db = level('/tmp/db')
-var cl = level('/tmp/cl')
-
-lrep.install(db, cl, config)
+var db = lrep(level('/tmp/db'), config) 
 
 db.put('some-key', 'some-value', function(err) {
 })

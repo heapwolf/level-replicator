@@ -1,166 +1,108 @@
-var path = require('path')
 var net = require('net')
-var EventEmitter = require('events').EventEmitter
 
-var level = require('level')
-var sublevel = require('level-sublevel')
-var multilevel = require('multilevel')
-var stringRange = require('string-range')
-var hooks = require('level-hooks')
-var mts = require('monotonic-timestamp')
-var secure = require('secure-peer')
+var multilevel = require('multilevel');
 
-var replicate = require('./replicate')
-var PACKAGE = require('./package.json')
-var securepeer
+var prefix = '\xff__changes__\xff';
+exports.server = function server(db) {
 
-function server(db, repDB, config) {
-  config = config || {}
-  config.sep = config.sep || db.sep || '\xff'
-
-  if (config.pems) {
-    var pems = require(config.pems)
-    config.public = pems.public
-    securepeer = secure(pems)
+  if (db.sep) { // prefer sublevel's delimiter
+    prefix = db.sep + '__changes__' + db.sep;
   }
 
-  var opts = {
-    valueEncoding: 'json'
-  }
+  var put = db.put;
+  var batch = db.batch;
+  var del = db.del;
 
-  var ee = new EventEmitter
-
-  ee.on('error', function(err) {
-    server.emit('error', err)
-  })
-
-  ee.on('compatible', function(version) {
-    server.emit('compatible', version)
-  })
-
-  hooks(db)
-
-  if (repDB == 'sublevel') {
-    // Use a sublevel for replication. This is more robust but requires other clients and code to be aware.
-    db = sublevel(db)
-    repDB = db.sublevel('_replicator')
-    var not_my_key = anti_checker(repDB)
-    db.hooks.pre(not_my_key, add_change)
-  } else {
-    // Use a separate database for replication. This works for any db and code, but can lead to data loss since the replication
-    // log is not committed to disk in a transaction with the database changes. This could one day move to a journaling format,
-    // with keys and values committed to the log first, then "confirmed" after the write succeeds. When starting up, replay
-    // uncommitted journal entries in order.
-    repDB = repDB || level(path.join(__dirname, 'replication-set'), { valueEncoding: 'json' })
-    repDB = sublevel(repDB)
-    db.hooks.post(log_change)
-  }
-
-  var changes = repDB.sublevel('changes', {valueEncoding:'json'})
-
-  function log_change(change, add) {
-    changes.put(mts(), {type:change.type, key:change.key}, function (er) {
-      if (er)
-        server.emit('error', er)
-      else
-        server.emit('change', change)
+  // get the next change for a key
+  function getNextChange(type, key, cb) {
+    var error;
+    var last_change;
+    var s = db.createReadStream({
+      reverse: true,
+      limit: 1,
+      start: prefix + key + '!~'
     })
-  }
-
-  function add_change(change, add) {
-    add({type:'put', key:mts(), value:{type:change.type, key:change.key}, valueEncoding:'json'}, changes)
-    setImmediate(function() { server.emit('change', change) })
-  }
-
-  changes.methods = db.methods || {}
-  changes.methods['fetch'] = { type: 'async' }
-  changes.methods['version'] = { type: 'async' }
-  changes.methods['createReadStream'] = { type: 'readable' }
-
-  changes.fetch = function(key, cb) {
-    db.get(key, cb)
-    ee.emit('fetch', key)
-  }
-
-  changes.version = function(cb) {
-    repDB.get('version', function(er, version) {
-      if (er)
-        return ee.emit('error', er)
-      cb(null, version)
+    s.on('error', function(err) {
+      error = err;
     })
-  }
-
-  config.access = config.access || function() {
-    return true
-  }
-
-  config.auth = config.auth || function(user, cb) {
-    cb(null, user)
-  }
-
-  var server = net.createServer(function (con) {
-    ee.emit('connection')
-
-    if (securepeer && config.pems) {
-
-      var securedpeer = securepeer(function (stream) {
-        stream.pipe(multilevel.server(changes, config)).pipe(stream)
-      })
-      securedpeer.pipe(con).pipe(securedpeer)
-
-      if (!config.identify) {
-        throw new Error('A secure connection requres that an identify method be defined.')
+    s.on('data', function(r) {
+      if (r.key.indexOf(prefix) == -1) return;
+      last_change = r.value;
+      last_change.type = type;
+      last_change.clock++;
+    })
+    s.on('end', function() {
+      if (last_change == null) {
+        last_change = {
+          type: type,
+          clock: 1
+        };
       }
-
-      securedpeer.on('identify', config.identify.bind(config));
-    }
-    else {
-      con.pipe(multilevel.server(changes, config)).pipe(con)
-    }
-
-  })
-
-  var replicator = replicate(db, changes, ee, config)
-
-  server.on('close', function() {
-    clearInterval(replicator)
-    db.close(function() {
-      repDB.close(function() {
-        server.emit('closed')
-      })
-    })
-  })
-
-  // Initialize the changes database structure.
-  repDB.put('version', PACKAGE.version, function(er) {
-    if(er)
-      return ee.emit('error', er)
-
-    if (config.listen == 'skip')
-      server.emit('ready', changes)
-    else
-      server.listen(config.port || 8000, function() {
-        ee.emit('listening', config.port || 8000)
-        server.emit('ready', changes)
-      })
-  })
-
-  return server
-}
-
-
-// Return a checker for all keys NOT within this sublevel.
-function anti_checker(db) {
-  var min = db.prefix()
-  var max = min + db.options.sep + db.options.sep // This may be slighly wrong but as long as keys do not start with \xff it's ok.
-  var checker = stringRange.checker({'min':min, 'max':max})
-
-  return function not_in_range(key) {
-    return ! checker(key)
+      if (!error) cb(null, last_change);
+      else cb(error);
+    });
   }
+
+  function prepOp(type, key, value, options) {
+    var new_value = { type: type, key: key, value: value };
+    if (options.keyEncoding) new_value.keyEncoding = options.keyEncoding;
+    if (options.valueEncoding) new_value.valueEncoding = options.valueEncoding;
+    return new_value;
+  }
+
+  db.put = function(key, value, options, cb) {
+
+    if (typeof options == 'function') {
+      cb = options;
+      options = {};
+    }
+    // this item is just being replicated...
+    if (options.replicated) {
+      return put.call(db, key, value, options, cb);
+    }
+
+    var op = prepOp('put', key, value, options);
+    db.batch([op], cb);
+  };
+
+  db.del = function(key, options, cb) {
+
+    if (typeof options == 'function') {
+      cb = options;
+      options = {};
+    }
+
+    // this item is just being replicated...
+    if (options.replicated) {
+      return del.call(db, key, cb);
+    }
+
+    db.batch([{ type: 'del', key: key }], cb);
+  };
+
+  db.batch = function(ops, cb) {
+
+    var that = this;
+    var counter = ops.length;
+    logs = [];
+
+    ops.forEach(function(op) {
+      getNextChange(op.type, op.key, function(err, change) {
+        if (err) return cb(err);
+
+        logs.push({ 
+          type: 'put',
+          key: prefix + [op.key, change.clock].join('!'),
+          value: change
+        });
+
+        if (--counter == 0) {
+          batch.call(db, ops.concat(logs), cb);
+        }
+      });
+    })
+  };
+
+  return db;
 }
 
-
-exports.createServer = server 
-exports.server = server
-exports.install = server
