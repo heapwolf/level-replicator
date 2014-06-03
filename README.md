@@ -1,6 +1,3 @@
-
-![img](/replicator.png)
-
 # SYNOPSIS
 A simple eventually consistent master-master replication module 
 for leveldb.
