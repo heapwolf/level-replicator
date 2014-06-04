@@ -8,21 +8,41 @@ exports.server = function server(db, options) {
     prefix = db.sep + '__changes__' + db.sep;
   }
 
+  var test = options.test;
+
   var put = db.put;
   var batch = db.batch;
   var del = db.del;
+  var close = db.close;
 
   var write_velocity = 0;
-  var connect_interval = 18e5; // 1.5HR
+  var write_velocity_last = 0;
+  var connect_velocity = 100;
   var connection = 0;
+  var port = options.port || 9000;
+  var host = (options.host || '127.0.0.1');
+  var servers = options.servers || [];
 
   var server = net.createServer(function (con) {
     con.pipe(multilevel.server(db, options)).pipe(con);
   });
 
-  function on_connect(s) {
-    stream.pipe(db.createRpcStream()).pipe(stream);
-    
+  server.listen(port, function() {
+    db.emit('listening');
+  });
+
+  server.on('connection', function() {
+    db.emit('connection');
+  });
+
+  server.on('error', function (err) {
+    db.emit('error', err);
+  });
+
+  function on_connect(conn) {
+    var dbc = multilevel.client();
+    conn.pipe(dbc.createRpcStream()).pipe(conn);
+    db.emit('connect');
     //
     // determine what to pull down here.
     //
@@ -36,17 +56,22 @@ exports.server = function server(db, options) {
     clearInterval(loop);
     loop = setInterval(function() {
 
-      var servers = Object.keys(config.servers || {})
-      var r = Math.random()*servers.length
-      var peer = servers[Math.floor(r)]
-   
+      var l = Math.random() * servers.length;
+      var r = Math.floor(l);
+      var peer = servers[Math.floor(r)];
+
       if (peer) {
-        peer = server.split(':');
+        peer = peer.split(':');
         var host = peer[0];
         var port = parseInt(peer[1], 10);
-        net.connect(port, host, on_connect)
+        var client = net.connect(port, host, function() {
+          on_connect(client);
+        });
+        client.on('error', function(err) { 
+          db.emit('error'); 
+        });
       }
-    }, connect_velocity);
+    }, connect_velocity * (test ? 10 : 1e6));
   };
 
   //
@@ -54,13 +79,18 @@ exports.server = function server(db, options) {
   // so we can poll for that value outside of the main connection loop.
   //
   var connection_selector = setInterval(function() {
-    var new_velocity = connect_interval - (write_velocity * 1e3);
-    if (connect_velocity > new_velocity) {
+    if (write_velocity == write_velocity_last) return;
+
+    var q = (25 / 100) * connect_velocity; // TODO: make reduction dynamic.
+    var new_velocity = connect_velocity - (write_velocity * q);
+
+    if (new_velocity < connect_velocity) {
+
+      write_velocity_last = write_velocity;
       connect_velocity = new_velocity;
       createLoop();
     }
-  }, 1e4);
-
+  }, 1e3);
 
   // get the next change for a key
   function getNextChange(type, key, cb) {
@@ -149,6 +179,12 @@ exports.server = function server(db, options) {
         }
       });
     })
+  };
+ 
+  db.close = function() {
+    server.close();
+    clearInterval(connection_selector);
+    close.apply(db, arguments);
   };
 
   return db;
