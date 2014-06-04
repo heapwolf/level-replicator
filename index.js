@@ -16,7 +16,7 @@ exports.server = function server(db, options) {
   var close = db.close;
 
   var write_velocity = 0;
-  var write_velocity_last = 0;
+  var last_write = { velocity: 0, ticks: 0 };
   var connect_velocity = 100;
   var connection = 0;
   var port = options.port || 9000;
@@ -51,10 +51,24 @@ exports.server = function server(db, options) {
   var loop;
   var connect_velocity;
 
+  //
+  // for testing we can use nice short intervals,
+  // for real world use cases we want longer times.
+  //
+  // there needs to be a base number and the user should be able
+  // to specify a multiplier that suits their use case. Otherwise
+  // we can pick a pretty reasonable default.
+  //
+  var connection_multiplier = (options.multiplier || (test ? 10 : 1e6));
+
   function createLoop() {
 
     clearInterval(loop);
+
     loop = setInterval(function() {
+
+      // start the loop but don't connect if there is nothing to write.
+      if (!write_velocity) return;
 
       var l = Math.random() * servers.length;
       var r = Math.floor(l);
@@ -71,25 +85,44 @@ exports.server = function server(db, options) {
           db.emit('error'); 
         });
       }
-    }, connect_velocity * (test ? 10 : 1e6));
+    }, connect_velocity * connection_multiplier);
   };
+
+  function calcVelocity() {
+    var reduction = (25 / 100) * connect_velocity;
+    return connect_velocity - (write_velocity * reduction);
+  }
 
   //
   // the connection velocity should be determined by the write velocity.
   // so we can poll for that value outside of the main connection loop.
   //
-  var connection_selector = setInterval(function() {
-    if (write_velocity == write_velocity_last) return;
+  var connector = setInterval(function() {
+    //
+    // don't increase the write velocity if no new writes have been made.
+    // limit how long a loop can run for in the same state when there are 
+    // no new writes.
+    //
+    if (write_velocity <= last_write.velocity && write_velocity != 0) {
+      if (++last_write.ticks >= test ? 1 : (25 / 100 * write_velocity)) {
+        last_write.ticks = 0;
+        --write_velocity;
+      }
+    }
 
-    var q = (25 / 100) * connect_velocity; // TODO: make reduction dynamic.
-    var new_velocity = connect_velocity - (write_velocity * q);
+    //
+    // this is a little arbitrary, but each write subtracts 25% of the
+    // current connect_velocity. could/should this be more intellegent?
+    //
+    var new_velocity = calcVelocity();
 
     if (new_velocity < connect_velocity) {
 
-      write_velocity_last = write_velocity;
+      last_write.velocity = write_velocity;
       connect_velocity = new_velocity;
-      createLoop();
     }
+
+    createLoop();
   }, 1e3);
 
   // get the next change for a key
@@ -161,6 +194,8 @@ exports.server = function server(db, options) {
   db.batch = function(ops, cb) {
 
     write_velocity += ops.length;
+    last_write.velocity = write_velocity;
+
     var counter = ops.length;
     logs = [];
 
@@ -183,7 +218,7 @@ exports.server = function server(db, options) {
  
   db.close = function() {
     server.close();
-    clearInterval(connection_selector);
+    clearInterval(connector);
     close.apply(db, arguments);
   };
 

@@ -86,7 +86,7 @@ describe('Replicator', function () {
   // 1. the databases are able to accept connections.
   // 2. the databases are able to connect to other databases.
   // 3. the databases connect to eachother based on their write velocity.
-  // 4. TODO: connections slow down when there are less writes.
+  // 4. the number of connection attempts should slow down if writes slow down.
   //
   it('the connection velocity should be determined by the write velocity', function(done) {
 
@@ -108,7 +108,7 @@ describe('Replicator', function () {
     });
 
     function finish() {
-      assert(connection_count > 0, 'the server received at least one connection');
+      assert(connection_count == 0, 'the server should have stopped getting connections');
       db1.close();
       db2.close();
       done();
@@ -124,12 +124,17 @@ describe('Replicator', function () {
             assert(!err, 'a test key was put into the database');
 
             setTimeout(function() {
+
+              assert(connection_count > 0, 'the server should have received at least one connection');
               assert(connect_count > 0, 'after writes, the server should start connecting');
-              finish();
+              connection_count = 0;
+
+              setTimeout(function() {
+                finish();
+              }, 1e3);
             }, 1e3);
         });
       }, 2e3);
-
     });
   });
 
