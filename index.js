@@ -1,9 +1,8 @@
 var net = require('net')
-
 var multilevel = require('multilevel');
 
 var prefix = '\xff__changes__\xff';
-exports.server = function server(db) {
+exports.server = function server(db, options) {
 
   if (db.sep) { // prefer sublevel's delimiter
     prefix = db.sep + '__changes__' + db.sep;
@@ -13,41 +12,87 @@ exports.server = function server(db) {
   var batch = db.batch;
   var del = db.del;
 
-  // get the next change for a key
-  function getNextChange(type, key, cb) {
-    var error;
-    var last_change;
-    var s = db.createReadStream({
-      reverse: true,
-      limit: 1,
-      start: prefix + key + '!~'
-    })
-    s.on('error', function(err) {
-      error = err;
-    })
-    s.on('data', function(r) {
-      if (r.key.indexOf(prefix) == -1) return;
-      last_change = r.value;
-      last_change.type = type;
-      last_change.clock++;
-    })
-    s.on('end', function() {
-      if (last_change == null) {
-        last_change = {
-          type: type,
-          clock: 1
-        };
-      }
-      if (!error) cb(null, last_change);
-      else cb(error);
-    });
+  var write_velocity = 0;
+  var connect_interval = 18e5; // 1.5HR
+  var connection = 0;
+
+  var server = net.createServer(function (con) {
+    con.pipe(multilevel.server(db, options)).pipe(con);
+  });
+
+  function on_connect(s) {
+    stream.pipe(db.createRpcStream()).pipe(stream);
+    
+    //
+    // determine what to pull down here.
+    //
   }
 
-  function prepOp(type, key, value, options) {
-    var new_value = { type: type, key: key, value: value };
-    if (options.keyEncoding) new_value.keyEncoding = options.keyEncoding;
-    if (options.valueEncoding) new_value.valueEncoding = options.valueEncoding;
-    return new_value;
+  var loop;
+  var connect_velocity;
+
+  function createLoop() {
+
+    clearInterval(loop);
+    loop = setInterval(function() {
+
+      var servers = Object.keys(config.servers || {})
+      var r = Math.random()*servers.length
+      var peer = servers[Math.floor(r)]
+   
+      if (peer) {
+        peer = server.split(':');
+        var host = peer[0];
+        var port = parseInt(peer[1], 10);
+        net.connect(port, host, on_connect)
+      }
+    }, connect_velocity);
+  };
+
+  //
+  // the connection velocity should be determined by the write velocity.
+  // so we can poll for that value outside of the main connection loop.
+  //
+  var connection_selector = setInterval(function() {
+    var new_velocity = connect_interval - (write_velocity * 1e3);
+    if (connect_velocity > new_velocity) {
+      connect_velocity = new_velocity;
+      createLoop();
+    }
+  }, 1e4);
+
+
+  // get the next change for a key
+  function getNextChange(type, key, cb) {
+
+    var error;
+    var last_change;
+
+    db
+      .createReadStream({
+        reverse: true,
+        limit: 1,
+        start: prefix + key + '!~'
+      })
+      .on('error', function(err) {
+        error = err;
+      })
+      .on('data', function(r) {
+        if (r.key.indexOf(prefix) == -1) return;
+        last_change = r.value;
+        last_change.type = type;
+        last_change.clock++;
+      })
+      .on('end', function() {
+        if (last_change == null) {
+          last_change = {
+            type: type,
+            clock: 1
+          };
+        }
+        if (!error) cb(null, last_change);
+        else cb(error);
+      });
   }
 
   db.put = function(key, value, options, cb) {
@@ -61,7 +106,10 @@ exports.server = function server(db) {
       return put.call(db, key, value, options, cb);
     }
 
-    var op = prepOp('put', key, value, options);
+    var op = { type: 'put', key: key, value: value };
+    if (options.keyEncoding) op.keyEncoding = options.keyEncoding;
+    if (options.valueEncoding) op.valueEncoding = options.valueEncoding;
+ 
     db.batch([op], cb);
   };
 
@@ -82,7 +130,7 @@ exports.server = function server(db) {
 
   db.batch = function(ops, cb) {
 
-    var that = this;
+    write_velocity += ops.length;
     var counter = ops.length;
     logs = [];
 
