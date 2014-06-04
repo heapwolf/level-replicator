@@ -19,8 +19,8 @@ is based on the Lamport Timestamp for determining order after distribution.
 
 - If an update operation (a put or delete) is committed to the local database.
 
-  - Its log is looked up, the operation is documented and the logical clock
-    is incremented and a new log is created.
+  - Its log is looked up, the logical clock is incremented and a new log is
+    created which also contains the operation type.
   - The key, value and log are atomically committed to the database
     in a batch operation.
 
@@ -30,9 +30,12 @@ is based on the Lamport Timestamp for determining order after distribution.
 - When the database connects, it reads the logs from the remote database in
   reverse until it finds a log that it already has.
 
-  - The latest log for each key is placed into memory and then iterated over.
-    - If the log does not exist locally, its corresponding key/value is 
-      committed to the local database.
+  - The latest log for each key is placed into memory and then iterated over
+    to determine what should be added to the change log and what should be added
+    to the store.
+
+    - If the log does not exist locally, the log and its corresponding key/value
+      is committed to the local database.
     - If the log exists locally and its clock is earlier, a new log is created
       with a clock set to one greater than the maximum of the local and remote
       clock's value. Its corresponding value is introduced to the database.
@@ -61,7 +64,7 @@ var config = {
   port: 8000 // port for this server
 }
 
-var db = rep(level('/tmp/db'), config) 
+var db = rep(level('/tmp/db'), config)
 
 // put something into the database
 db.put('some-key', 'some-value', function(err) {
@@ -82,7 +85,7 @@ var config = {
   port: 8001
 }
 
-var db = rep(level('/tmp/db'), config) 
+var db = rep(level('/tmp/db'), config)
 
 db.put('some-key', 'some-value', function(err) {
 })
@@ -95,14 +98,14 @@ var level = require('level')
 var lrep = require('level-replicator')
 
 var config = {
-  servers: { 
+  servers: {
     "127.0.0.1:8000": {},
-    "127.0.0.1:8001": {} 
+    "127.0.0.1:8001": {}
   },
   port: 8002
 }
 
-var db = lrep(level('/tmp/db'), config) 
+var db = lrep(level('/tmp/db'), config)
 
 db.put('some-key', 'some-value', function(err) {
 })
