@@ -57,10 +57,10 @@ var level = require('level')
 var rep = require('level-replicator')
 
 var config = {
-  servers: { // list of servers to replicate with
-    "127.0.0.1:8001": {}, // a serer id and its meta data
-    "127.0.0.1:8002": {} // a serer id and its meta data
-  },
+  servers: [ // list of servers to replicate with
+    "127.0.0.1:8001", // a serer id and its meta data
+    "127.0.0.1:8002" // a serer id and its meta data
+  ],
   port: 8000 // port for this server
 }
 
@@ -78,10 +78,10 @@ var level = require('level')
 var lrep = require('level-replicator')
 
 var config = {
-  servers: {
-    "127.0.0.1:8000": {},
-    "127.0.0.1:8002": {}
-  },
+  servers: [
+    "127.0.0.1:8000",
+    "127.0.0.1:8002"
+  ],
   port: 8001
 }
 
@@ -98,10 +98,10 @@ var level = require('level')
 var lrep = require('level-replicator')
 
 var config = {
-  servers: {
-    "127.0.0.1:8000": {},
-    "127.0.0.1:8001": {}
-  },
+  servers: [
+    "127.0.0.1:8000",
+    "127.0.0.1:8001"
+  ],
   port: 8002
 }
 
