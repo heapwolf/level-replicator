@@ -1,7 +1,8 @@
-var net = require('net')
+var net = require('net');
 var multilevel = require('multilevel');
 
 var prefix = '\xff__changes__\xff';
+
 exports.server = function server(db, options) {
 
   if (db.sep) { // prefer sublevel's delimiter
@@ -39,13 +40,47 @@ exports.server = function server(db, options) {
     db.emit('error', err);
   });
 
+  db.on('add', function(address) {
+    options.servers.push(address);
+  });
+
+  function parse_logs(dbc, logs) {
+    // reduce logs to just those who have the lastest clock
+    // if they dont exist, get from dbc and put them to db
+    // if they do exist, compare their clocks
+    // - if they are early, disgard
+    // - if they are later, max and keep
+  }
+
   function on_connect(conn) {
+
     var dbc = multilevel.client();
     conn.pipe(dbc.createRpcStream()).pipe(conn);
     db.emit('connect');
-    //
-    // determine what to pull down here.
-    //
+
+    getLastLog(function(err, last_log) {
+      if (err) return db.emit('error', err);
+      
+      var logs = [];
+      var error;
+
+      //
+      // get all the remote logs up until the last
+      // locally known log and put them in local memory.
+      //
+      dbc.createReadStream({
+        reverse: true,
+        start: prefix,
+        end: last_log
+      }).on('error', functon(err) {
+        error = err;
+      }).on('data', function(d) {
+        logs.push(d);
+      }).on('end', function() {
+        if (error) return db.emit('error', error);
+        parse_logs(dbc, logs);
+      });
+    });
   }
 
   var loop;
@@ -67,7 +102,9 @@ exports.server = function server(db, options) {
 
     loop = setInterval(function() {
 
-      // start the loop but don't connect if there is nothing to write.
+      //
+      // start the loop but don't connect if there is no activity?
+      //
       if (!write_velocity) return;
 
       var l = Math.random() * servers.length;
@@ -81,12 +118,31 @@ exports.server = function server(db, options) {
         var client = net.connect(port, host, function() {
           on_connect(client);
         });
-        client.on('error', function(err) { 
-          db.emit('error'); 
+        client.on('error', function(err) {
+          db.emit('error');
         });
       }
     }, connect_velocity * connection_multiplier);
   };
+
+  function getLastLog(cb) {
+
+    var last_log;
+    var error;
+
+    db.createReadStream({
+      reverse: true,
+      limit: 1,
+      start: prefix
+    }).on('error', function(err) {
+      error = err;
+    }).on('data', function(r) {
+      last_log = r;
+    }).on('end', function() {
+      if (!err) return cb(null, last_log);
+      else return cb(error);
+    });
+  }
 
   function calcVelocity() {
     var reduction = (25 / 100) * connect_velocity;
@@ -100,10 +156,14 @@ exports.server = function server(db, options) {
   var connector = setInterval(function() {
     //
     // don't increase the write velocity if no new writes have been made.
-    // limit how long a loop can run for in the same state when there are 
+    // limit how long a loop can run for in the same state when there are
     // no new writes.
     //
     if (write_velocity <= last_write.velocity && write_velocity != 0) {
+
+      //
+      // should ticks be 1 for the test?
+      //
       if (++last_write.ticks >= test ? 1 : (25 / 100 * write_velocity)) {
         last_write.ticks = 0;
         --write_velocity;
@@ -172,7 +232,7 @@ exports.server = function server(db, options) {
     var op = { type: 'put', key: key, value: value };
     if (options.keyEncoding) op.keyEncoding = options.keyEncoding;
     if (options.valueEncoding) op.valueEncoding = options.valueEncoding;
- 
+
     db.batch([op], cb);
   };
 
@@ -203,7 +263,7 @@ exports.server = function server(db, options) {
       getNextChange(op.type, op.key, function(err, change) {
         if (err) return cb(err);
 
-        logs.push({ 
+        logs.push({
           type: 'put',
           key: prefix + [op.key, change.clock].join('!'),
           value: change
@@ -215,7 +275,7 @@ exports.server = function server(db, options) {
       });
     })
   };
- 
+
   db.close = function() {
     server.close();
     clearInterval(connector);
