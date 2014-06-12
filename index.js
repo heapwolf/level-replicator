@@ -44,15 +44,81 @@ exports.server = function server(db, options) {
     options.servers.push(address);
   });
 
-  function parse_logs(dbc, logs) {
+  function parse_logs(dbc, _logs, _port, _host) {
+
+    console.log(host, port, ' -> ', _host, _port);
+
+    var remote_logs = {};
+    var ops = [];
+    var count = 0;
+
     // reduce logs to just those who have the lastest clock
-    // if they dont exist, get from dbc and put them to db
-    // if they do exist, compare their clocks
-    // - if they are early, disgard
-    // - if they are later, max and keep
+    //
+    // since logs are sequential and we have received them
+    // in reverse, the first of each willl be the highest.
+    //
+    _logs.forEach(function(log) {
+      if (!remote_logs[log.value.key]) {
+        remote_logs[log.value.key] = log;
+      }
+    });
+
+    //
+    // determine how to handle each remote log.
+    //
+    var keys = Object.keys(remote_logs);
+
+    function write_ops() {
+      batch.call(db, ops, function(err) {
+        if (err) db.emit('error', err);
+      });
+    }
+
+    keys.forEach(function(log_key) {
+
+      var remote_log = remote_logs[log_key];
+
+      //
+      // get the local log
+      //
+      db.get(log_key, function(err, local_log) {
+        if (err && !err.notFound) return db.emit('error', err);
+
+        //
+        // we already have it and ours is the newest, bail out.
+        //
+        if (local_log && local_log.value.clock > remote_log.clock) return;
+
+        //
+        // we don't have it or ours is older, get it.
+        //
+        var remote_key = remote_logs[log_key].value.key;
+        local_log = local_log || { clock: 0 };
+
+        dbc.get(remote_key, function(err, remote_value) {
+          if (err) return db.emit('error', err);
+
+          console.log(remote_key, remote_value);
+
+
+          // the remote key and value
+          ops.push({ type: 'put', key: remote_key, value: remote_value });
+
+          // construct a log
+          var new_clock = Math.max(local_log.clock, remote_log.value.clock) + 1;
+          remote_log.value.clock = new_clock;
+          remote_log.type = 'put';
+
+          ops.push(remote_log);
+
+          write_ops(); // how many times this happens can be optimized
+        });
+      })
+    });
+
   }
 
-  function on_connect(conn) {
+  function on_connect(conn, _port, _host) {
 
     var dbc = multilevel.client();
     conn.pipe(dbc.createRpcStream()).pipe(conn);
@@ -60,7 +126,7 @@ exports.server = function server(db, options) {
 
     getLastLog(function(err, last_log) {
       if (err) return db.emit('error', err);
-      
+
       var logs = [];
       var error;
 
@@ -68,17 +134,18 @@ exports.server = function server(db, options) {
       // get all the remote logs up until the last
       // locally known log and put them in local memory.
       //
+
       dbc.createReadStream({
         reverse: true,
-        start: prefix,
-        end: last_log
-      }).on('error', functon(err) {
+        start: prefix + '~',
+        end: last_log.key
+      }).on('error', function(err) {
         error = err;
       }).on('data', function(d) {
         logs.push(d);
       }).on('end', function() {
         if (error) return db.emit('error', error);
-        parse_logs(dbc, logs);
+        parse_logs(dbc, logs, _port, _host);
       });
     });
   }
@@ -116,8 +183,9 @@ exports.server = function server(db, options) {
         var host = peer[0];
         var port = parseInt(peer[1], 10);
         var client = net.connect(port, host, function() {
-          on_connect(client);
+          on_connect(client, port, host);
         });
+
         client.on('error', function(err) {
           db.emit('error');
         });
@@ -133,14 +201,14 @@ exports.server = function server(db, options) {
     db.createReadStream({
       reverse: true,
       limit: 1,
-      start: prefix
+      start: prefix + '~'
     }).on('error', function(err) {
       error = err;
     }).on('data', function(r) {
       last_log = r;
     }).on('end', function() {
-      if (!err) return cb(null, last_log);
-      else return cb(error);
+      if (error) return cb(error);
+      else cb(null, last_log);
     });
   }
 
@@ -196,20 +264,18 @@ exports.server = function server(db, options) {
         reverse: true,
         limit: 1,
         start: prefix + key + '!~'
-      })
-      .on('error', function(err) {
+      }).on('error', function(err) {
         error = err;
-      })
-      .on('data', function(r) {
+      }).on('data', function(r) {
         if (r.key.indexOf(prefix) == -1) return;
         last_change = r.value;
         last_change.type = type;
         last_change.clock++;
-      })
-      .on('end', function() {
+      }).on('end', function() {
         if (last_change == null) {
           last_change = {
             type: type,
+            key: key,
             clock: 1
           };
         }
