@@ -2,4 +2,5 @@
 test/data/
 node_modules/
 .*.swp
+test/.ldb_history
 test/db*

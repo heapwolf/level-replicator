@@ -20,7 +20,7 @@ describe('Replicator', function () {
     });
   });
 
-  it('on each destructive operation, a logical clock should be incremented and the operation type recorded for each corresponding key', function(done) {
+ /* it('on each destructive operation, a logical clock should be incremented and the operation type recorded for each corresponding key', function(done) {
 
     var db = makeDB();
 
@@ -93,11 +93,11 @@ describe('Replicator', function () {
   //
   it('the connection velocity should be determined by the write velocity', function(done) {
 
-    var db1 = makeDB({ servers: ['127.0.0.1:9001'], port: 9000, path: '/1', test: true });
-    var db2 = makeDB({ servers: ['127.0.0.1:9000'], port: 9001, path: '/2', test: true });
+    var db1 = makeDB({ servers: ['127.0.0.1:9001'], port: 9000, path: '/1', test: true, multiplier: 100 });
+    var db2 = makeDB({ servers: ['127.0.0.1:9000'], port: 9001, path: '/2', test: true, multiplier: 100 });
 
-    db1.on('error', function() { /* we can swallow connect errors for this test. */ });
-    db2.on('error', function() { /* we can swallow connect errors for this test. */ });
+    db1.on('error', function() { });
+    db2.on('error', function() { });
 
     var connect_count = 0;
     var connection_count = 0;
@@ -140,9 +140,10 @@ describe('Replicator', function () {
       }, 2e3);
     });
   });
+*/
 
 
-  it('db1 should pull changes from db2', function(done) {
+  /*it('db1 should pull changes from db2', function(done) {
 
     var db1 = makeDB({ servers: ['127.0.0.1:9001'], port: 9000, path: '/1', test: true });
     var db2 = makeDB({ servers: ['127.0.0.1:9000'], port: 9001, path: '/2', test: true });
@@ -154,10 +155,20 @@ describe('Replicator', function () {
     var connection_count = 0;
 
     db1.on('connect', function() {
+      console.log('DB1 CONNECT');
       connect_count++;
     });
 
+    db2.on('connect', function() {
+      console.log('DB2 CONNECT');
+    });
+
+    db1.on('connection', function() {
+      console.log('DB1 CONNECTION')
+    });
+
     db2.on('connection', function() {
+      console.log('DB2 CONNECTION')
       connection_count++;
     });
 
@@ -209,6 +220,6 @@ describe('Replicator', function () {
       }, 2e3);
     });
   });
-
+*/
 });
 

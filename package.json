@@ -19,7 +19,9 @@
   "dependencies": {
     "level": "0.18.0",
     "level-sublevel": "^5.2.0",
-    "multilevel": "~5.5.0"
+    "multilevel": "~5.5.0",
+    "node-uuid": "^1.4.1",
+    "seq-lex": "^1.0.1"
   },
   "devDependencies": {
     "levelup": "^0.18.3",
@@ -38,4 +40,3 @@
   },
   "homepage": "https://github.com/hij1nx/level-replicator"
 }
-
