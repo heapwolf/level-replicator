@@ -52,8 +52,6 @@ module.exports = function replicator(db, options) {
 
     db.emit('connect', host, port);
 
-    //console.log(options.host, options.port, '->', host, port)
-
     //
     // Introduce ourselves to the remote peer (overwrites).
     //
@@ -87,7 +85,6 @@ module.exports = function replicator(db, options) {
 
   function parseLogs(remote, remote_logs, host, port) {
 
-    console.log(options.host, options.port, '->', host, port)
     //
     // 
     //
@@ -99,8 +96,6 @@ module.exports = function replicator(db, options) {
         if (err) db.emit('error', err);
       });
     }
-
-    console.log(remote_logs)
 
     remote_logs.forEach(function(remote_log) {
 

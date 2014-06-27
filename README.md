@@ -8,37 +8,34 @@ A simple eventually consistent master-master replication module for leveldb.
 - If a write operation (a put or delete) is committed to the local database
   for the first time.
 
-  - A sequential log-index is created (the log is a sequential number and a
-    pointer to the log).
-  - A log is created that contains the type of operation and a logical clock 
-    that is set at `0`).
-  - The new key/value, log and log-index are atomically committed to the local 
+  - A log is created that contains the type of operation and a logical clock
+    that is set at `0`. The log's key is the peer's id and a sequence.
+  - An index is created (a pointer to the log for faster lookups on writes).
+  - The new key/value, log and log-index are atomically committed to the local
     database.
 
 - If an update operation (a put or delete) is committed to the local database.
 
-  - Its log is looked up
-    - The logical clock is incremented
+  - The index is used to look up the keys corresponding log
+    - The logical clock in the log is incremented
     - The type of operation is updated
-    - A new sequential log-index is created and the old one is deleted.
+    - A new log-index is created and the old one is deleted.
   - The new key/value, log and log-index are atomically committed to the local
     database.
 
-- When a write or update operation occurs, the frequently at which the local
-  database will try to connect to remote databases increases.
+- The frequently at which the peer will try to replicate is determined by its
+  write-velocity.
 
-- When the database connects to a peer, it reads the remote log-indexes in
-  reverse until it finds a familiar log-index.
+- When the database connects to a peer, it reads its remote logs in reverse
+  until it finds a locally known entry.
 
   - The latest log for each key is placed into memory and then iterated
-    over to determine what should be added to the change log and what should
-    be added to the store.
+    over to determine what should be added locally.
 
     - If the log does not exist locally, the log and its corresponding
       key/value is committed to the local database.
-    - If the log exists locally and its clock is earlier, the remote log is
-      copied as well as the remote key and value, they are both atomically
-      committed.
+    - If the log exists locally (with an earlier clock), the remote log
+      and key/value are both atomically committed.
 
 ## REPLICATON CONFLICTS
 Before a local database can accept writes, it must attempt to replicate. This
@@ -60,12 +57,13 @@ accepted. A resolver is a function can be passed into the configuration...
 ```
 
 ## PEER DISCOVERY
-Server lists are a nightmare to maintain. They also don't work in auto-scaling
-scenarios. So `level-replicator` uses UDP multicast to discover peers that it
-will replicate with.
+Server lists are a nightmare to maintain. They also don't work well in
+auto-scaling scenarios. So `level-replicator` prefers to use UDP multicast to
+discover peers that it will replicate with.
 
-Not all replication scenarios will be within the same subnet, so you may want
-to add known servers to your configuration, for instance...
+Because not all VPCs support multicast and not all replication scenarios will
+be within the same subnet, you may want to add known servers to a configuration,
+for instance...
 
 ```json
 { servers: ['100.2.14.104:8000', '100.2.14.105:8000'] }
