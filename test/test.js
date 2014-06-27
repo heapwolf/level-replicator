@@ -2,14 +2,15 @@ var assert = require('assert');
 var rimraf = require('rimraf');
 var fs = require('fs');
 var rep = require('..');
+var mget = require('level-mget');
+var uuid = require('node-uuid');
 
 var dirpath = __dirname + '/db';
-var default_prefix = '\xff__changes__\xff';
 
 function makeDB(config) {
   config = config || {}
   var db = require('level')(dirpath + (config.path || '/1'), { valueEncoding: 'json' });
-  return rep.server(db, config);
+  return rep(db, config);
 }
 
 describe('Replicator', function () {
@@ -20,206 +21,158 @@ describe('Replicator', function () {
     });
   });
 
- /* it('on each destructive operation, a logical clock should be incremented and the operation type recorded for each corresponding key', function(done) {
+  it('peers should connect to eachother when there are writes', function(done) {
 
-    var db = makeDB();
-
-    assert(db, 'an instance can be created and run with no peers to connect to');
-
-    function finish() {
-      db.close();
-      assert(db.isClosed(), 'database can be closed properly');
-      done();
-    }
-
-    function verifyLogs() {
-      var count = 4;
-      db.get(default_prefix + 'normal_put!1', function(err, value) {
-        assert(value.clock == 1, 'log entry was created');
-        assert(value.type == 'put', 'the type of operation was recorded');
-        if (--count == 0) finish();
-      });
-
-      db.get(default_prefix + 'normal_put!2', function(err, value) {
-        assert(value.clock == 2, 'log entry created and clock incremented');
-        assert(value.type == 'del', 'type changed to reflect last operation');
-        if (--count == 0) finish();
-      });
-
-      db.get(default_prefix + 'batched_put!1', function(err, value) {
-        assert(value.clock == 1, 'log entry was created');
-        assert(value.type == 'put', 'the type of operation was recorded');
-        if (--count == 0) finish();
-      });
-
-      db.get(default_prefix + 'batched_put!2', function(err, value) {
-        assert(value.clock == 2, 'log entry created and clock incremented');
-        assert(value.type == 'del', 'type changed to reflect last operation');
-        if (--count == 0) finish();
-      });
-
-    }
-
-    db.put('normal_put', 1, function(err) {
-      assert(!err, 'successful put');
-
-      db.batch([
-        { type: 'put', key: 'batched_put', value: 1 },
-        { type: 'del', key: 'normal_put' }
-      ], function(err) {
-        assert(!err, 'successful batch');
-
-        db.del('batched_put', function(err) {
-          assert(!err, 'successful delete');
-          verifyLogs();
-        });
-      });
-    })
-
-  });
-
-  //
-  // within a 1000ms window there should be no connect events if there are no write operations.
-  // after a few write operations, the peer should start to try to connect.
-  // after doing nothing for 1000ms, the number of connects should decrease.
-  //
-  //
-  // this test asserts that the following things work together...
-  //
-  // 1. the databases are able to accept connections.
-  // 2. the databases are able to connect to other databases.
-  // 3. the databases connect to eachother based on their write velocity.
-  // 4. the number of connection attempts should slow down if writes slow down.
-  //
-  it('the connection velocity should be determined by the write velocity', function(done) {
-
-    var db1 = makeDB({ servers: ['127.0.0.1:9001'], port: 9000, path: '/1', test: true, multiplier: 100 });
-    var db2 = makeDB({ servers: ['127.0.0.1:9000'], port: 9001, path: '/2', test: true, multiplier: 100 });
+    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
+    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
+    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
+    db3.on('error', function() { });
 
-    var connect_count = 0;
-    var connection_count = 0;
+    var connect_count = { 9000: 0, 9001: 0, 9002: 0 };
+    var connection_count = { 9000: 0, 9001: 0, 9002: 0 };
 
-    db1.on('connect', function() {
-      connect_count++;
-    });
+    var on_connect = function(host, port) {
+      connect_count[port]++;
+    };
 
-    db2.on('connection', function() {
-      connection_count++;
-    });
+    var on_connection = function(host, port) {
+      connection_count[port]++;
+    };
 
-    function finish() {
-      assert(connection_count == 0, 'the server should have stopped getting connections');
-      db1.close();
-      db2.close();
-      done();
+    db1.on('connect', on_connect);
+    db2.on('connect', on_connect);
+    db3.on('connect', on_connect);
+
+    db1.on('connection', on_connection);
+    db2.on('connection', on_connection);
+    db3.on('connection', on_connection);
+
+    var ops = 7;
+    function assert_op(err) { 
+      assert(!err); 
+      if (--ops == 0) {
+        db1.close();
+        db2.close();
+        db3.close();
+        done(); 
+      }
     }
 
-    db1.on('listening', function() {
-      assert(true, 'database should be able to listen for connections');
+    setTimeout(function() {
+
+      db1.put('foo1', 100, assert_op);
 
       setTimeout(function() {
-        assert(connect_count == 0, 'no data has been written, no connections should have been made');
+        db1.batch([
+          { type: 'put', key: 'foo2', value: 200 },
+          { type: 'put', key: 'foo3', value: 300 }
+          ], assert_op);
+      }, 800);
 
-          db1.put('test_key', 1, function(err) {
-            assert(!err, 'a test key was put into the database');
+      db2.batch([
+        { type: 'put', key: 'bar1', value: 100 },
+        { type: 'put', key: 'bar2', value: 200 },
+        { type: 'put', key: 'bar3', value: 300 }
+        ], assert_op);
 
-            setTimeout(function() {
+      db3.batch([
+        { type: 'put', key: 'bazz1', value: 100 },
+        { type: 'put', key: 'bazz2', value: 200 },
+        { type: 'put', key: 'bazz3', value: 300 }
+        ], assert_op);
 
-              assert(connection_count > 0, 'the server should have received at least one connection');
-              assert(connect_count > 0, 'after writes, the server should start connecting');
-              connection_count = 0;
+      setTimeout(function() {
 
-              setTimeout(function() {
-                finish();
-              }, 1e3);
-            }, 1e3);
-        });
-      }, 2e3);
-    });
+        var keys = ['foo1', 'foo2', 'foo3', 'bar1', 'bar2', 'bar3', 'bazz1', 'bazz2', 'bazz3'];
+
+        mget(db1, keys, assert_op);
+        mget(db2, keys, assert_op);
+        mget(db2, keys, assert_op);
+
+      }, 2000);
+
+    }, 500);
+
   });
-*/
 
+  it('peers should connect to eachother when there are writes', function(done) {
 
-  /*it('db1 should pull changes from db2', function(done) {
-
-    var db1 = makeDB({ servers: ['127.0.0.1:9001'], port: 9000, path: '/1', test: true });
-    var db2 = makeDB({ servers: ['127.0.0.1:9000'], port: 9001, path: '/2', test: true });
+    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
+    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
+    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
+    db3.on('error', function() { });
 
-    var connect_count = 0;
-    var connection_count = 0;
+    var connect_count = { 9000: 0, 9001: 0, 9002: 0 };
+    var connection_count = { 9000: 0, 9001: 0, 9002: 0 };
 
-    db1.on('connect', function() {
-      console.log('DB1 CONNECT');
-      connect_count++;
-    });
+    var on_connect = function(host, port) {
+      connect_count[port]++;
+    };
 
-    db2.on('connect', function() {
-      console.log('DB2 CONNECT');
-    });
+    var on_connection = function(host, port) {
+      connection_count[port]++;
+    };
 
-    db1.on('connection', function() {
-      console.log('DB1 CONNECTION')
-    });
+    db1.on('connect', on_connect);
+    db2.on('connect', on_connect);
+    db3.on('connect', on_connect);
 
-    db2.on('connection', function() {
-      console.log('DB2 CONNECTION')
-      connection_count++;
-    });
+    db1.on('connection', on_connection);
+    db2.on('connection', on_connection);
+    db3.on('connection', on_connection);
 
-    function finish() {
-      assert(connection_count == 0, 'the server should have stopped getting connections');
-      db1.close();
-      db2.close();
-      done();
-    }
+    function fin(err) { assert(!err); }
 
-    //
-    // give db2 some activity that db1 will want to replicate.
-    //
-    db2.put('test_key200', 200, function(err) {
-      assert(!err);
-      db2.del('test_key200', function(err) {
-        assert(!err);
-      })
-    });
+    setTimeout(function() {
 
-    db2.put('test_key100', 100, function(err) {
-      assert(!err);
-
-      db2.put('test_key100', 200, function(err) {
-        assert(!err);
-      });
-    });
-
-    db1.on('listening', function() {
-      assert(true, 'database should be able to listen for connections');
+      db1.put('foo1', 100, fin);
 
       setTimeout(function() {
-        assert(connect_count == 0, 'no data has been written, no connections should have been made');
+        db1.batch([
+          { type: 'put', key: 'foo2', value: 200 },
+          { type: 'put', key: 'foo3', value: 300 }
+          ], fin);
+      }, 800);
 
-          db1.put('test_key', 1, function(err) {
-            assert(!err, 'a test key was put into the database');
+      db2.batch([
+        { type: 'put', key: 'bar1', value: 100 },
+        { type: 'put', key: 'bar2', value: 200 },
+        { type: 'put', key: 'bar3', value: 300 }
+        ], fin);
 
-            setTimeout(function() {
+      db3.batch([
+        { type: 'put', key: 'bazz1', value: 100 },
+        { type: 'put', key: 'bazz2', value: 200 },
+        { type: 'put', key: 'bazz3', value: 300 }
+        ], fin);
 
-              assert(connection_count > 0, 'the server should have received at least one connection');
-              assert(connect_count > 0, 'after writes, the server should start connecting');
-              connection_count = 0;
+      setTimeout(function() {
 
-              setTimeout(function() {
-                finish();
-              }, 1e3);
-            }, 1e3);
-        });
-      }, 2e3);
-    });
+        assert(connect_count['9000'] > 2, 'db1 connected more than once');
+        assert(connect_count['9001'] > 2, 'db2 connected more than once');
+        assert(connect_count['9002'] > 2, 'db3 connected more than once');
+        assert(connection_count['9000'] > 2, 'db1 was connected to more than once');
+        assert(connection_count['9001'] > 2, 'db2 was connected to more than once');
+        assert(connection_count['9002'] > 2, 'db3 was connected to more than once');
+
+        db1.close();
+        db2.close();
+        db3.close();
+ 
+        done();
+      }, 2000);
+
+    }, 500);
+
   });
-*/
+
+
+
 });
 

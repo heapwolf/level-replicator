@@ -46,7 +46,7 @@ module.exports = function replicator(db, options) {
     last_velocity: 0  // the last known write velocity after the interval passes
   };
 
-  var intervals = connect(options, writes, function(conn, host, port) {
+  var intervals = connect(db, options, writes, function(conn, host, port) {
 
     var remote = cs.createClient(conn);
 

@@ -24,6 +24,7 @@
     "seq-lex": "^1.0.1"
   },
   "devDependencies": {
+    "level-mget": "^1.0.1",
     "levelup": "^0.18.3",
     "mocha": "~1.17.1",
     "rimraf": "~2.2.2"
