@@ -89,7 +89,7 @@ describe('Replicator', function () {
         db3.close();
  
         done();
-      }, 2000);
+      }, 1000);
 
     }, 500);
 

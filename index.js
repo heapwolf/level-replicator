@@ -303,7 +303,6 @@ module.exports = function replicator(db, options) {
 
         if (--counter == 0) {
           if (error) return cb(error);
-          console.log(ops.concat(meta));
           batch.call(db, ops.concat(meta), cb);
         }
       });
