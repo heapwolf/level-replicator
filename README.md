@@ -1,8 +1,44 @@
 # SYNOPSIS
 A simple eventually consistent master-master replication module for leveldb.
 
-# BUILD STATUS
-[![build-status](https://www.codeship.io/projects/0d604520-6cc1-0131-203c-22ccfa4c21c9/status)](https://www.codeship.io/projects/13128)
+## MULTI MASTER EXAMPLE
+
+### Server 1
+
+```js
+var level = require('level')
+var replicate = require('level-replicator')
+
+var db = replicate(level('/tmp/db'))
+
+// put something into the database
+db.put('some-key', 'some-value', function(err) {
+})
+```
+
+### Server 2
+
+```js
+var level = require('level')
+var replicate = require('level-replicator')
+
+var db = replicate(level('/tmp/db'))
+
+db.put('some-key', 'some-value', function(err) {
+})
+```
+
+### Server 3...
+
+```js
+var level = require('level')
+var replicate = require('level-replicator')
+
+var db = replicate(level('/tmp/db'))
+
+db.put('some-key', 'some-value', function(err) {
+})
+```
 
 ## REPLICATION ALGORITHM
 - If a write operation (a put or delete) is committed to the local database
@@ -72,43 +108,4 @@ for instance...
 ## TODO
 
 The changes log could have an expiration policy.
-
-## EXAMPLE: MORE THAN TWO SERVERS
-
-### Server 1
-
-```js
-var level = require('level')
-var replicate = require('level-replicator')
-
-var db = replicate(level('/tmp/db'))
-
-// put something into the database
-db.put('some-key', 'some-value', function(err) {
-})
-```
-
-### Server 2
-
-```js
-var level = require('level')
-var replicate = require('level-replicator')
-
-var db = replicate(level('/tmp/db'))
-
-db.put('some-key', 'some-value', function(err) {
-})
-```
-
-### Server 3...
-
-```js
-var level = require('level')
-var replicate = require('level-replicator')
-
-var db = replicate(level('/tmp/db'))
-
-db.put('some-key', 'some-value', function(err) {
-})
-```
 
