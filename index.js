@@ -124,11 +124,17 @@ module.exports = function replicator(db, options) {
           // save the data to the local database
           ops.push({ type: 'put', key: remote_log.value.key, value: remote_value });
 
-          // this could be a little cleaner...
+          // extract the key and the peerId from the remote log entry
           var key = remote_log.key.replace(sublevels.log, '');
           var peerId = key.substr(0, key.indexOf('!'));
+
+          // create a history entry
           var historykey = sublevels.history + peerId;
+          var indexkey = sublevels.index + remote_log.value.key;
           ops.push({ type: 'put', key: historykey, value: key });
+
+          // create an index for this key
+          ops.push({ type: 'put', key: indexkey, value: remote_log.key });
 
           // save the log to the local database
           remote_log.type = 'put';
@@ -247,10 +253,6 @@ module.exports = function replicator(db, options) {
       cb = options;
       options = {};
     }
-    // this item is just being replicated...
-    if (options.replicated) {
-      return put.call(db, key, value, options, cb);
-    }
 
     var op = { type: 'put', key: key, value: value };
     if (options.keyEncoding) op.keyEncoding = options.keyEncoding;
@@ -265,12 +267,6 @@ module.exports = function replicator(db, options) {
       cb = options;
       options = {};
     }
-
-    // this item is just being replicated...
-    if (options.replicated) {
-      return del.call(db, key, cb);
-    }
-
     db.batch([{ type: 'del', key: key }], cb);
   };
 
@@ -307,6 +303,7 @@ module.exports = function replicator(db, options) {
 
         if (--counter == 0) {
           if (error) return cb(error);
+          console.log(ops.concat(meta));
           batch.call(db, ops.concat(meta), cb);
         }
       });
