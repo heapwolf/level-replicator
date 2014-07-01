@@ -20,7 +20,9 @@ module.exports = function replicator(db, options) {
   options.host = options.host || '127.0.0.1';
   options.peers = options.peers || {};
 
-  peerManager(options);
+  if (options.multicast) {
+    peerManager(options);
+  }
 
   var server = cs.createServer(db, options);
   var sequence = seqlex(); // TODO: persist to disk
@@ -73,16 +75,16 @@ module.exports = function replicator(db, options) {
           // logs in reverse until the last_seen log appears, then parse the
           // new logs.
           //
-          getRemoteLogs(remote, peers, history, function(err, remote_logs) {
+          getRemoteLogs(remote, peers, history, function(err, remote_logs, id) {
             if (err) return db.emit('error', err);
-            parseLogs(remote, remote_logs, host, port);
+            parseLogs(remote, remote_logs, host, port, id);
           });
         });
       });
     });
   });
 
-  function parseLogs(remote, remote_logs, host, port) {
+  function parseLogs(remote, remote_logs, host, port, id) {
 
     var ops = [];
     var count = remote_logs.length;
@@ -93,67 +95,47 @@ module.exports = function replicator(db, options) {
       });
     }
 
-    console.log(options.host, options.port, ' <- ', host, port);
-    console.log(remote_logs)
-
+    //console.log(require('util').inspect(info, { depth: null }));
     remote_logs.forEach(function(remote_log) {
 
-
-      //
-      // check if we already have the remote log, determine if we 
-      // want the log and its data.
-      //
-      db.get(remote_log.key, function(err, local_log) {
+      // get the most recent local log.
+      var indexkey = sublevels.index + remote_log.value.key;
+      var remote_key = remote_log.key;
+      remote_log = remote_log.value; // just make the objects look the same :P
+      
+      db.get(indexkey, function(err, index) {
         if (err && !err.notFound) return db.emit('error', err);
-        else if (err) {
-          local_log = {
-            value: { clock: 0, sequence: String.fromCharCode(33) }
-          };
-        }
 
-        var possible_conflict = false;
+        index = index || '\xff'; // fool levelup into continuing even without a key.
 
-        if (local_log.clock > remote_log.value.clock) return;
-        if (local_log.clock === remote_log.value.clock) possible_conflict = true;
+        db.get(index, function(err, local_log) {
+          if (err && !err.notFound) return db.emit('error', err);
 
-        //
-        // we want to store the remote value and the remote log
-        //
-        remote.get(remote_log.value.key, function(err, remote_value) {
-          if (err) return db.emit('error', err);
+          // get the remote value for the key
+          remote.get(remote_log.key, function(err, remote_value) {
 
-          if (possible_conflict) {
-            //
-            // are there more of these than there should be?
-            //
-            //console.log('/!\\ POTENTIAL CONFLICT /!\\');
-            //console.log(remote_log.value.key, local_log.key)
-            //if (options.resolve(remote_value, 
-          }
+            // if the remote key is more recent or we don't have it...
+            if (!local_log || remote_log.clock > local_log.clock) {
 
-          // save the data to the local database
-          ops.push({ type: 'put', key: remote_log.value.key, value: remote_value });
+              var nextkey = instance_id + '!' + remote_log.sequence;
 
-          // extract the key and the peerId from the remote log entry
-          var key = remote_log.key.replace(sublevels.log, '');
-          var peerId = key.substr(0, key.indexOf('!'));
+              // clear our index???
+              ops.push({ type: 'del', key: index });
+              // create a new log
+              ops.push({ type: 'put', key: sublevels.log + nextkey, value: remote_log });
+              // create a new index
+              ops.push({ type: 'put', key: sublevels.index + remote_log.key, value: remote_log });
+              // capture the new key/value with the appropriate type
+              ops.push({ type: remote_log.type, key: remote_log.key, value: remote_value });
+            }
 
-          // create a history entry
-          var historykey = sublevels.history + peerId;
-          var indexkey = sublevels.index + remote_log.value.key;
-          ops.push({ type: 'put', key: historykey, value: key });
-
-          // create an index for this key
-          ops.push({ type: 'put', key: indexkey, value: remote_log.key });
-
-          // save the log to the local database
-          remote_log.type = 'put';
-          ops.push(remote_log);
-
-          write();
+            // create a history entry
+            ops.push({ type: 'put', key: sublevels.history + id, value: remote_key });
+            // write to the local store
+            write();
+          });
         });
       });
-
     });
   }
 
@@ -163,12 +145,13 @@ module.exports = function replicator(db, options) {
     var error;
 
     remote.createReadStream({
+      values: false,
       start: sublevels.peers,
       end: sublevels.peers + '~'
     }).on('error', function(err) {
       error = err;
-    }).on('data', function(d) {
-      peers.push(d);
+    }).on('data', function(id) {
+      peers.push(id.replace(sublevels.peers, ''));
     }).on('end', function() {
       if (error) return cb(error);
       cb(null, peers);
@@ -179,15 +162,20 @@ module.exports = function replicator(db, options) {
 
     remote.identifyPeer(function(err, peerId) {
 
-      peers.push({ key: peerId });
+      peers.push(peerId);
+
+      // we don't need to ask about our own logs.
+      //var selfref = peers.indexOf(instance_id);
+      //if (selfref > 0) {
+      //  peers.splice(selfref, 1);
+      //}
 
       var count = peers.length;
       var remote_logs = [];
 
-      peers.forEach(function(peer) {
+      peers.forEach(function(id) {
 
         var error;
-        var id = peer.key.replace(sublevels.peers, '');
 
         if (id == instance_id) {
           return --count;
@@ -197,21 +185,17 @@ module.exports = function replicator(db, options) {
         var key = sublevels.log + id;
 
         //
-        // if we have history, use it as the upper bound
-        // if we don't we can set the upper bound to be
-        // the end of the range.
+        // if we don't have history we can set the upper
+        // bound to be the start of the range.
         //
-        if (last_seen) {
-          last_seen = sublevels.log + last_seen;
-        }
-        else {
-          last_seen = key;
+        if (!last_seen) {
+          last_seen = key + '!';
         }
 
         remote.createReadStream({
           reverse: true,
-          lte: key + '~', // last_seen,
-          gt: last_seen
+          gt: last_seen,
+          lt: key + '!~'
         }).on('error', function(err) {
           error = err;
         }).on('data', function(d) {
@@ -219,7 +203,8 @@ module.exports = function replicator(db, options) {
         }).on('end', function() {
           if (--count == 0) {
             if (error) return cb(error);
-            cb(null, remote_logs);
+
+            cb(null, remote_logs, id);
           }
         });
       });
@@ -290,29 +275,32 @@ module.exports = function replicator(db, options) {
 
     ops.forEach(function(op) {
 
-      db.get(sublevels.index + op.key, function(err, record) {
+      var indexkey = sublevels.index + op.key
+
+      db.get(indexkey, function(err, record) {
         if (err && !err.notFound) return error = err;
-        else if (err) {
-          record = { clock: 0, sequence: 0 };
+        
+        if (record) {
+          var oldlog = sublevels.log + instance_id + '!' + record.sequence;
+          meta.push({ type: 'del', key: oldlog });
         }
         else {
-          var oldkey = sublevels.log + instance_id + '!' + record.sequence;
-          meta.push({ type: 'del', key: oldkey });
+          record = { clock: 0 };
         }
 
-        sequence = seqlex(sequence); // increment the locally global sequence
-        record.sequence = sequence; // assign new sequence
-        record.clock++; // increment the clock
+        sequence = seqlex(sequence);
+
+        record.sequence = sequence;
+        record.clock++;
+        record.type = op.type;
         record.key = op.key;
 
-        // LOG INDEX: construct read/write optimized lookup and log pair
         var logkey = sublevels.log + instance_id + '!' + sequence;
-        var indexkey = sublevels.index + op.key;
+
+        meta.push({ type: 'put', key: indexkey, value: record });
         meta.push({ type: 'put', key: logkey, value: record });
-        meta.push({ type: 'put', key: indexkey, value: logkey });
 
         if (--counter == 0) {
-          if (error) return cb(error);
           batch.call(db, ops.concat(meta), cb);
         }
       });
