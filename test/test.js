@@ -21,11 +21,15 @@ describe('Replicator', function () {
     });
   });
 
-  it('peers should connect to eachother when there are writes', function(done) {
+/*  it('peers should connect to eachother when there are writes', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var n1 = uuid.v4();
+    var n2 = uuid.v4();
+    var n3 = uuid.v4();
+
+    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
@@ -93,16 +97,19 @@ describe('Replicator', function () {
 
     }, 500);
 
-  });
+  }); */
 
 
 
   it('arbitrary writes provided at different times' +
       'should propagate to all peers after N milliseconds', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var n1 = uuid.v4();
+    var n2 = uuid.v4();
+    var n3 = uuid.v4();
+    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
@@ -161,52 +168,60 @@ describe('Replicator', function () {
 
   it('desctructive operations should get propagated', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var n1 = uuid.v4();
+    var n2 = uuid.v4();
+    var n3 = uuid.v4();
+    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
     db3.on('error', function() { });
 
-    var connect_count = { 9000: 0, 9001: 0, 9002: 0 };
-    var connection_count = { 9000: 0, 9001: 0, 9002: 0 };
-
-    var ops = 7;
-
-    function finish() {
-      db1.close();
-      db2.close();
-      db3.close();
-      done(); 
-    }
-
-    function assert_ok(err) { 
-      assert(!err); 
-      if (--ops == 0) finish();
-    }
-
-    function assert_fail(err) {
-      assert(err);
-      if (--ops == 0) finish();
-    }
-
     setTimeout(function() {
+      // put some keys in the database
+      db1.put('foo', '0', function(err) { assert(!err);
+      db2.put('bar', '1', function(err) { assert(!err);
+      db3.put('bazz', '2', function(err) { assert(!err);
 
-      db1.put('foo', '0', assert_ok);
-      db2.put('bar', '1', assert_ok);
-      db3.put('bazz', '2', assert_ok);
-
-      setTimeout(function() {
-        db2.del('bar', assert_ok);
-        
+        // wait for the changes to propagate...
         setTimeout(function() {
-          db1.get('bar', assert_fail);
-          db2.get('bar', assert_fail);
-          db2.get('bar', assert_fail);
-        }, 1000);
-      }, 500);
-    }, 500);
+          mget(db1, ['bazz', 'bar', 'foo'], function(err) {
+            assert(!err);
+            mget(db2, ['bazz', 'bar', 'foo'], function(err) {
+              assert(!err);
+              mget(db3, ['bazz', 'bar', 'foo'], function(err) {
+                assert(!err);
+
+                // delete one of them!
+                db2.del('bar', function(err) {
+                  assert(!err);
+
+                  // wait for the change to propagate...
+                  setTimeout(function() {
+                    // make sure they are all gone!
+                    db1.get('bar', function(err) {
+                      assert(err);
+                      db2.get('bar', function(err) {
+                        assert(err);
+                        db3.get('bar', function(err) {
+                          assert(err);
+                          done();
+                        });
+                      });
+                    });
+                  }, 2000);
+                });
+              });
+            });
+          });
+
+        }, 2000);
+
+      })})});
+
+     }, 500);
   });
 
 });
