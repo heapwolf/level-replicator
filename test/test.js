@@ -23,9 +23,9 @@ describe('Replicator', function () {
 
   it('peers should connect to eachother when there are writes', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4(), multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
@@ -100,9 +100,9 @@ describe('Replicator', function () {
   it('arbitrary writes provided at different times' +
       'should propagate to all peers after N milliseconds', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4(), multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
@@ -161,9 +161,9 @@ describe('Replicator', function () {
 
   it('desctructive operations should get propagated', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4() });
-    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4() });
-    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4() });
+    var db1 = makeDB({ port: 9000, path: '/1', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/2', multiplier: 10, id: uuid.v4(), multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/3', multiplier: 10, id: uuid.v4(), multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });

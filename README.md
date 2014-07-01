@@ -1,5 +1,5 @@
 # SYNOPSIS
-A simple eventually consistent master-master replication module for leveldb.
+Eventually consistent log-based multi-master replication for leveldb.
 
 ## MULTI MASTER EXAMPLE
 
@@ -93,19 +93,28 @@ accepted. A resolver is a function can be passed into the configuration...
 ```
 
 ## PEER DISCOVERY
-Server lists are a nightmare to maintain. They also don't work well in
-auto-scaling scenarios. So `level-replicator` prefers to use UDP multicast to
-discover peers that it will replicate with.
+Server lists are a suck to maintain. They also don't work well in auto-scaling
+scenarios. `level-replicator` can use UDP multicast to discover peers that it
+will replicate with.
 
-Because not all VPCs support multicast and not all replication scenarios will
+However not all VPCs support multicast and not all replication scenarios will
 be within the same subnet, you may want to add known servers to a configuration,
 for instance...
 
-```json
-{ servers: ['100.2.14.104:8000', '100.2.14.105:8000'] }
+```js
+{ peers: ['100.2.14.104:8000', '100.2.14.105:8000'] }
 ```
 
-## TODO
+Otherwise you can use a service registry like [`seaport`] or an module
+like [`aws-instances`]() to feed the peers member of the options object.
 
-The changes log could have an expiration policy.
+## API
+
+### `replicator(db, [options])`
+
+*`{ multicast: true }`*
+To enable multicast use option.
+
+*`{ peers: ['100.2.14.104:8000'] }`*
+To provide an initial list of peers.
 

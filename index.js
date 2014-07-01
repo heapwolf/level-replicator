@@ -31,8 +31,7 @@ module.exports = function replicator(db, options) {
     log: sep + '__log__' + sep,
     index: sep + '__log_index__' + sep,
     peers: sep + '__peers__' + sep,
-    history: sep + '__history__' + sep,
-    conflicts: sep + '__conflicts__' + sep
+    history: sep + '__history__' + sep
   };
 
   var put = db.put;
@@ -85,9 +84,6 @@ module.exports = function replicator(db, options) {
 
   function parseLogs(remote, remote_logs, host, port) {
 
-    //
-    // 
-    //
     var ops = [];
     var count = remote_logs.length;
 
@@ -97,7 +93,11 @@ module.exports = function replicator(db, options) {
       });
     }
 
+    console.log(options.host, options.port, ' <- ', host, port);
+    console.log(remote_logs)
+
     remote_logs.forEach(function(remote_log) {
+
 
       //
       // check if we already have the remote log, determine if we 
@@ -111,15 +111,25 @@ module.exports = function replicator(db, options) {
           };
         }
 
-        if (local_log.value  && remote_log.value) {
-          if (local_log.clock > remote_log.value.clock) return;
-        }
+        var possible_conflict = false;
+
+        if (local_log.clock > remote_log.value.clock) return;
+        if (local_log.clock === remote_log.value.clock) possible_conflict = true;
 
         //
         // we want to store the remote value and the remote log
         //
         remote.get(remote_log.value.key, function(err, remote_value) {
           if (err) return db.emit('error', err);
+
+          if (possible_conflict) {
+            //
+            // are there more of these than there should be?
+            //
+            //console.log('/!\\ POTENTIAL CONFLICT /!\\');
+            //console.log(remote_log.value.key, local_log.key)
+            //if (options.resolve(remote_value, 
+          }
 
           // save the data to the local database
           ops.push({ type: 'put', key: remote_log.value.key, value: remote_value });
