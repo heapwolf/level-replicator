@@ -7,7 +7,7 @@
     "level-replicator": "./bin/server.js"
   },
   "scripts": {
-    "test": "mocha --recursive test --bail --colors --reporter spec --debug --timeout 8000"
+    "test": "mocha --recursive test --bail --colors --debug --timeout 4000"
   },
   "keywords": [
     "eventual",
