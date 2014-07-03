@@ -18,7 +18,6 @@
   "license": "MIT",
   "dependencies": {
     "level": "0.18.0",
-    "level-atomic": "0.0.1",
     "level-mget": "^1.0.1",
     "level-sublevel": "^5.2.0",
     "multilevel": "~5.5.0",

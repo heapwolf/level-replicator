@@ -11,7 +11,6 @@ var peerManager = require('./lib/peers');
 var connect = require('./lib/connect');
 var cs = require('./lib/client-server');
 
-var atomic = require('level-atomic');
 var seqlex = require('seq-lex');
 
 module.exports = function replicator(db, options) {
@@ -37,7 +36,6 @@ module.exports = function replicator(db, options) {
     history: sep + '__history__' + sep
   };
 
-  db = atomic(db);
 
   var put = db.put;
   var batch = db.batch;
@@ -277,7 +275,6 @@ module.exports = function replicator(db, options) {
 
       var indexkey = sublevels.index + op.key
 
-      db.lock(indexkey, function(db, done) {
         db.get(indexkey, function(err, record) {
           if (err && !err.notFound) return error = err;
 
@@ -306,14 +303,10 @@ module.exports = function replicator(db, options) {
           meta.push({ type: 'put', key: logkey, value: record });
 
           if (--counter == 0) {
-            batch.call(db, ops.concat(meta), function() {
-              done();
-              cb.apply(db, arguments);
-            });
+            batch.call(db, ops.concat(meta), cb);
           }
         });
       });
-    });
   };
 
   // TODO: possibly overwrite createReadStream to hide internal sublevels.
