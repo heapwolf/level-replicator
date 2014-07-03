@@ -96,7 +96,7 @@ module.exports = function replicator(db, options) {
     //
     function write() {
       batch.call(db, ops, function(err) {
-        if (err) db.emit('error', err);
+        if (err) return db.emit('error', err);
         if (!--count) remote.destroy();
       });
     }
@@ -106,16 +106,21 @@ module.exports = function replicator(db, options) {
       var remote_log = remote_logs[remote_logkey];
       var remote_index = sublevels.index + remote_log.key;
   
-      db.get(remote_index, function(err, index) {
-
-        index = index || '\xff'; // fool levelup into continuing even without a key.
-
-        db.get(index, function(err, local_log) {
+      db.get(remote_index, function(err, local_log) {
+        if (err && !err.notFound) return db.emit('error', err);
+        
+        db.get(remote_log.key, function(err, local_value) {
+          if (err && !err.notFound) return db.emit('error', err);
 
           remote.get(remote_log.key, function(err, remote_value) {
 
-            // determine if we want it
-            if (!local_log || remote_log.clock > local_log.clock) {
+            if (local_log && local_log.clock === remote_log.clock && options.resolver) {
+              if (options.resolver(local_value, remote_value)) {
+                remote_log.clock++;
+              }
+            }
+
+            if (!local_log || local_log.clock < remote_log.clock) {
 
               //ops.push({ type: 'del', key: sublevels.log + instance_id +'!'+ remote_log.sequence });
 

@@ -5,6 +5,7 @@ var rep = require('..');
 var mget = require('level-mget');
 var uuid = require('node-uuid');
 var level = require('level');
+var mts = require('monotonic-timestamp');
 
 var dirpath = __dirname + '/db';
 
@@ -102,7 +103,7 @@ describe('Replicator', function () {
         done();
       }, 1000);
 
-    }, 500);
+    }, 1000);
 
   });
 
@@ -179,7 +180,7 @@ describe('Replicator', function () {
         { type: 'put', key: 'bazz3', value: 300 }
         ], assert_op);
 
-    }, 500);
+    }, 1000);
 
   });
 
@@ -251,7 +252,7 @@ describe('Replicator', function () {
                             db1.close();
                             db2.close();
                             db3.close();
-                            process.exit(0);
+                            done();
 
                           })})});
                         });
@@ -272,5 +273,47 @@ describe('Replicator', function () {
 
   });
 
+
+  it('resolve a conflict', function(done) {
+
+    var n1 = uuid.v4();
+    var n2 = uuid.v4();
+    var n3 = uuid.v4();
+
+    var resolver = function(a, b) {
+      if (a.timestamp < b.timestamp) return true;
+    };
+
+    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true, resolver: resolver });
+    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true, resolver: resolver });
+    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true, resolver: resolver });
+
+    db1.on('error', function() {});
+    db2.on('error', function() {});
+    db3.on('error', function() {});
+
+    setTimeout(function() {
+
+      db1.put('foo', { value: '100', timestamp: mts() }, function(err) { assert(!err); })
+      db2.put('foo', { value: '200', timestamp: mts() }, function(err) { assert(!err); })
+      db3.put('foo', { value: '300', timestamp: mts() }, function(err) { assert(!err); })
+
+      setTimeout(function() {
+
+        db1.get('foo', function(err, val) {
+          console.log('[db1]', val);
+          db2.get('foo', function(err, val) {
+            console.log('[db2]', val);
+            db3.get('foo', function(err, val) {
+              console.log('[db3]', val);
+              done();
+            });
+          });
+        });
+
+      }, 1000);
+
+    }, 1000);
+  });
 });
 

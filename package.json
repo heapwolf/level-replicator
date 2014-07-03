@@ -28,6 +28,7 @@
     "level-mget": "^1.0.1",
     "levelup": "^0.18.3",
     "mocha": "~1.17.1",
+    "monotonic-timestamp": "0.0.8",
     "rimraf": "~2.2.2"
   },
   "directories": {

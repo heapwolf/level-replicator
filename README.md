@@ -86,10 +86,12 @@ or more servers, for example...
 
 Which write happened first? There is no reliable way to know. If this is a
 possibility for you, a resolver can be used to determine which write should be
-accepted. A resolver is a function can be passed into the configuration...
+accepted. A resolver is a function can be passed into the configuration. The
+resolver function should return `true` to accept the remote value or `false` to
+reject it.
 
 ```js
-{ resolver: function(a, b) { return a.timestamp > b.timestamp ? a : b; } }
+{ resolver: function(a, b) { return a.timestamp > b.timestamp; } }
 ```
 
 ## PEER DISCOVERY
