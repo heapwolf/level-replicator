@@ -105,15 +105,17 @@ for instance...
 { peers: ['100.2.14.104:8000', '100.2.14.105:8000'] }
 ```
 
-Otherwise you can use a service registry like [`seaport`] or an module
+Otherwise you can use a service registry like [`seaport`]() or an module
 like [`aws-instances`]() to feed the peers member of the options object.
 
 ## FAQ
 
 Q. Why not expose the tcp connection so I can pool it / manage it myself?
-A. Connections are not long lived, a server connects, has a conversation and then
-disconnects.
+
+A. Connections are not long lived, a server connects, has a conversation and
+then disconnects.
 
 Q. Why not allow me to manage the connection protocol?
+
 A. Give me a good use case.
 

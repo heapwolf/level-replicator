@@ -11,6 +11,7 @@ var peerManager = require('./lib/peers');
 var connect = require('./lib/connect');
 var cs = require('./lib/client-server');
 
+var atomic = require('level-atomic');
 var seqlex = require('seq-lex');
 
 module.exports = function replicator(db, options) {
@@ -35,6 +36,8 @@ module.exports = function replicator(db, options) {
     peers: sep + '__peers__' + sep,
     history: sep + '__history__' + sep
   };
+
+  db = atomic(db);
 
   var put = db.put;
   var batch = db.batch;
@@ -96,7 +99,7 @@ module.exports = function replicator(db, options) {
     function write() {
       batch.call(db, ops, function(err) {
         if (err) db.emit('error', err);
-        //remote.destroy();
+        if (!--count) remote.destroy();
       });
     }
 
@@ -274,36 +277,41 @@ module.exports = function replicator(db, options) {
 
       var indexkey = sublevels.index + op.key
 
-      db.get(indexkey, function(err, record) {
-        if (err && !err.notFound) return error = err;
+      db.lock(indexkey, function(db, done) {
+        db.get(indexkey, function(err, record) {
+          if (err && !err.notFound) return error = err;
 
-        if (record) {
-          var oldlog = sublevels.log + instance_id + '!' + record.sequence;
-          meta.push({ type: 'del', key: oldlog });
-        }
-        else {
-          record = { clock: 0 };
-        }
+          if (record) {
+            var oldlog = sublevels.log + instance_id + '!' + record.sequence;
+            meta.push({ type: 'del', key: oldlog });
+          }
+          else {
+            record = { clock: 0 };
+          }
 
-        //
-        // increase local write sequence so that when a remote sequence is
-        // added it comes in order after any local write has been made.
-        //
-        sequence = seqlex(sequence);
+          //
+          // increase local write sequence so that when a remote sequence is
+          // added it comes in order after any local write has been made.
+          //
+          sequence = seqlex(sequence);
 
-        record.sequence = seqlex(seqlex(record.sequence));
-        record.clock++;
-        record.type = op.type;
-        record.key = op.key;
+          record.sequence = seqlex(seqlex(record.sequence));
+          record.clock++;
+          record.type = op.type;
+          record.key = op.key;
 
-        var logkey = sublevels.log + instance_id + '!' + record.sequence;
+          var logkey = sublevels.log + instance_id + '!' + record.sequence;
 
-        meta.push({ type: 'put', key: indexkey, value: record });
-        meta.push({ type: 'put', key: logkey, value: record });
+          meta.push({ type: 'put', key: indexkey, value: record });
+          meta.push({ type: 'put', key: logkey, value: record });
 
-        if (--counter == 0) {
-          batch.call(db, ops.concat(meta), cb);
-        }
+          if (--counter == 0) {
+            batch.call(db, ops.concat(meta), function() {
+              done();
+              cb.apply(db, arguments);
+            });
+          }
+        });
       });
     });
   };
