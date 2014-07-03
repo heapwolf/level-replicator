@@ -1,6 +1,6 @@
 {
   "name": "level-replicator",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "description": "leveldb strong and eventual master-master replication",
   "main": "index.js",
   "bin": {
