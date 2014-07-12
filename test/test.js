@@ -107,18 +107,13 @@ describe('Replicator', function () {
 
   });
 
-
-
   it('arbitrary writes provided at different times' +
+
       'should propagate to all peers after N milliseconds', function(done) {
 
-    var n1 = uuid.v4();
-    var n2 = uuid.v4();
-    var n3 = uuid.v4();
-
-    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true });
-    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true });
-    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true });
+    var db1 = makeDB({ port: 9000, path: '/A', multiplier: 10, id: 'A', multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/B', multiplier: 10, id: 'B', multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/C', multiplier: 10, id: 'C', multicast: true });
 
     db1.on('error', function() { });
     db2.on('error', function() { });
@@ -127,7 +122,7 @@ describe('Replicator', function () {
     var connect_count = { 9000: 0, 9001: 0, 9002: 0 };
     var connection_count = { 9000: 0, 9001: 0, 9002: 0 };
 
-    var ops = 4;
+    var ops = 3;
 
     function assert_op(err) { 
       if (err) console.log(err)
@@ -141,11 +136,11 @@ describe('Replicator', function () {
  
       var keys = ['foo1', 'foo2', 'foo3', 'bar1', 'bar2', 'bar3', 'bazz1', 'bazz2', 'bazz3'];
 
-      mget(db1, keys, function(err) { assert(!err);
-      mget(db2, keys, function(err) { assert(!err);
-      mget(db2, keys, function(err) { assert(!err);
+      mget(db1, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
+      mget(db2, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
+      mget(db2, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
 
-        console.log('each database has 9 keys');
+        console.log('each database has %d keys', keys.length);
 
         db1.close();
         db2.close();
@@ -159,14 +154,11 @@ describe('Replicator', function () {
 
       console.log('writing 3 keys to each database');
 
-      db1.put('foo1', 100, assert_op);
-
-      setTimeout(function() {
-        db1.batch([
-          { type: 'put', key: 'foo2', value: 200 },
-          { type: 'put', key: 'foo3', value: 300 }
-          ], assert_op);
-      }, 800);
+      db1.batch([
+        { type: 'put', key: 'foo1', value: 100 },
+        { type: 'put', key: 'foo2', value: 200 },
+        { type: 'put', key: 'foo3', value: 300 }
+        ], assert_op);
 
       db2.batch([
         { type: 'put', key: 'bar1', value: 100 },
@@ -180,101 +172,102 @@ describe('Replicator', function () {
         { type: 'put', key: 'bazz3', value: 300 }
         ], assert_op);
 
-    }, 1000);
+    }, 500);
 
   });
 
-  it('desctructive operations should get propagated', function(done) {
 
-    var n1 = uuid.v4();
-    var n2 = uuid.v4();
-    var n3 = uuid.v4();
+  it('xarbitrary writes provided at different times' +
+      'should propagate to all peers after N milliseconds', function(done) {
 
-    var db1 = makeDB({ port: 9000, path: '/' + n1, multiplier: 10, id: n1, multicast: true });
-    var db2 = makeDB({ port: 9001, path: '/' + n2, multiplier: 10, id: n2, multicast: true });
-    var db3 = makeDB({ port: 9002, path: '/' + n3, multiplier: 10, id: n3, multicast: true });
+    var db1 = makeDB({ port: 9000, path: '/A', multiplier: 10, id: 'A', multicast: true });
+    var db2 = makeDB({ port: 9001, path: '/B', multiplier: 10, id: 'B', multicast: true });
+    var db3 = makeDB({ port: 9002, path: '/C', multiplier: 10, id: 'C', multicast: true });
 
-    db1.on('error', function() {});
-    db2.on('error', function() {});
-    db3.on('error', function() {});
+    db1.on('error', function() { });
+    db2.on('error', function() { });
+    db3.on('error', function() { });
 
-    var keys = ['bazz', 'bar', 'foo'];
+    var connect_count = { 9000: 0, 9001: 0, 9002: 0 };
+    var connection_count = { 9000: 0, 9001: 0, 9002: 0 };
 
-    console.log('createing three databases and letting them discover eachother...');
-    setTimeout(function() {
+    var ops = 3;
 
-      console.log('putting [db1] `foo`, [db2] `bar`, [db3] `bazz`');
-      // put some keys in the database
-      db1.put('foo', '0', function(err) { assert(!err);
-      db2.put('bar', '1', function(err) { assert(!err);
-      db3.put('bazz', '2', function(err) { assert(!err);
+    function assert_op(err) { 
+      assert(!err); 
+      if (--ops == 0) {
+        setTimeout(validate, 1000);
+      }
+    }
 
-        console.log('waiting for the writes to propagate...');
+    function validate() {
+ 
+      var keys = ['foo1', 'foo2', 'foo3', 'bar1', 'bar2', 'bar3', 'bazz1', 'bazz2', 'bazz3'];
 
-        // wait for the writes to propagate...
-        setTimeout(function() {
-          mget(db1, keys, function(err) { 
-            assert(!err); 
-            console.log('[db1] `bazz`, `bar` and `foo` found');
+      mget(db1, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
+      mget(db2, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
+      mget(db2, keys, function(err, value) { assert(!err); assert(Object.keys(value).length == keys.length)
 
-            mget(db2, keys, function(err) {
-              assert(!err);
-              console.log('[db2] `bazz`, `bar` and `foo` found');
+        console.log('\neach database has %d keys', keys.length);
 
-              mget(db3, keys, function(err) {
-                assert(!err);
-                console.log('[db3] `bazz`, `bar` and `foo` found');
+        db2.del('foo2', function() {
 
-                // delete one of them!
-                db2.del('bar', function(err) {
-                  assert(!err);
+          console.log('deleted `foo2` from `db2`');
 
-                  console.log('[db2] deleting `bar`, waiting for changes to propagate...')
+          setTimeout(function() {
 
-                  setTimeout(function() {
+            db1.get('foo2', function(err) {
+              assert(err);
+              db2.get('foo2', function(err) {
+                assert(err);
+                db3.get('foo2', function(err) {
+                  assert(err);
 
-                    mget(db1, ['bazz', 'foo'], function(err) { 
-                      assert(!err);
-                      console.log('[db1] `bazz` and `foo` found');
+                  console.log('`foo2` was not found in any database.');
 
-                      mget(db2, ['bazz', 'foo'], function(err) {
-                        assert(!err);
-                        console.log('[db2] `bazz` and `foo` found');
-
-                        mget(db3, ['bazz', 'foo'], function(err) {
-                          assert(!err);
-                          console.log('[db3] `bazz` and `foo` found');
-
-                          db1.get('bar', function(err) { assert(err); console.log('[db1] `bar` not found');
-                          db2.get('bar', function(err) { assert(err); console.log('[db2] `bar` not found');
-                          db3.get('bar', function(err) { assert(err); console.log('[db3] `bar` not found');
-
-                            db1.close();
-                            db2.close();
-                            db3.close();
-                            done();
-
-                          })})});
-                        });
-                      });
-                    });
-
-                  }, 1000); 
+                  db1.close();
+                  db2.close();
+                  db3.close();
+                  done();
                 });
               });
             });
-          });
 
-        }, 1000);
+          }, 2000);
+        });
 
-      })})})
+      }) }) });
+    }
 
-    }, 1000);
+    setTimeout(function() {
+
+      console.log('\nwriting 3 keys to each database');
+
+      db1.batch([
+        { type: 'put', key: 'foo1', value: 100 },
+        { type: 'put', key: 'foo2', value: 200 },
+        { type: 'put', key: 'foo3', value: 300 }
+        ], assert_op);
+
+      db2.batch([
+        { type: 'put', key: 'bar1', value: 100 },
+        { type: 'put', key: 'bar2', value: 200 },
+        { type: 'put', key: 'bar3', value: 300 }
+        ], assert_op);
+
+      db3.batch([
+        { type: 'put', key: 'bazz1', value: 100 },
+        { type: 'put', key: 'bazz2', value: 200 },
+        { type: 'put', key: 'bazz3', value: 300 }
+        ], assert_op);
+
+    }, 500);
 
   });
 
 
-  it('resolve a conflict', function(done) {
+
+/*  it('resolve a conflict', function(done) {
 
     var n1 = uuid.v4();
     var n2 = uuid.v4();
@@ -314,6 +307,6 @@ describe('Replicator', function () {
       }, 1000);
 
     }, 1000);
-  });
+  });*/
 });
 
