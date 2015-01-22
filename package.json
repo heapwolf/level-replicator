@@ -3,9 +3,6 @@
   "version": "2.0.0",
   "description": "leveldb strong and eventual master-master replication",
   "main": "index.js",
-  "bin": {
-    "level-replicator": "./bin/server.js"
-  },
   "scripts": {
     "test": "mocha --recursive test --bail --colors --debug --timeout 4000"
   },
