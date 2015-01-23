@@ -55,6 +55,11 @@ var db = replicate(level('/tmp/db'))
 
 db.put('some-key', 'some-value', function(err) {
 })
+
+db.on('connect', function(host, port){ console.log('connect', host, port) })
+db.on('connection', function(host, port){ console.log('connect', host, port) })
+db.on('error', function(err){ console.log('error', err) })
+
 ```
 
 ### Server 3...
