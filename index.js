@@ -165,11 +165,12 @@ module.exports = function replicator(db, options) {
       }).on('error', function(err) {
         error = err;
       }).on('data', function(id) {
+        var peerId = id.replace(sublevels.peers, '');
         // we dont need to read logs that the peer has
         // gathered from us, that would be a waste of time.
-        if (id == instance_id) return;
+        if (peerId == instance_id) return;
         // push just the id into the array.
-        peers.push(id.replace(sublevels.peers, ''));
+        peers.push(peerId);
       }).on('end', function() {
         if (error) return cb(error);
         cb(null, peers);
