@@ -3,15 +3,39 @@ Eventually consistent log-based multi-master replication for leveldb.
 
 ## MULTI MASTER EXAMPLE
 
-### Server 1
+*example with UDP peer discovery (see below): peers object can be let empty*
+### Server 1 instance 1
 
 ```js
 var level = require('level')
 var replicate = require('level-replicator')
 
-var db = replicate(level('/tmp/db'))
+var levelConfig = { // level configuration object }
+
+// default settings
+var replicationConfig = { port: 9000, host: '127.0.0.1', peers: {} }
+
+var db = replicate(level('/tmp/db', levelConfig), replicationConfig)
 
 // put something into the database
+db.put('some-key', 'some-value', function(err) {
+})
+```
+
+### Server 1 instance 2
+
+```js
+var level = require('level')
+var replicate = require('level-replicator')
+
+var levelConfig = { // level configuration object }
+
+// different port
+var replicationConfig = { port: 9001, host: '127.0.0.1', peers: {} }
+
+// different db folder
+var db = replicate(level('/tmp/db2', levelConfig), replicationConfig)
+
 db.put('some-key', 'some-value', function(err) {
 })
 ```
@@ -22,10 +46,20 @@ db.put('some-key', 'some-value', function(err) {
 var level = require('level')
 var replicate = require('level-replicator')
 
+var levelConfig = { // level configuration object }
+
+// any port
+var replicationConfig = { port: 9000, host: '127.0.0.1', peers: {} }
+
 var db = replicate(level('/tmp/db'))
 
 db.put('some-key', 'some-value', function(err) {
 })
+
+db.on('connect', function(host, port){ console.log('connect', host, port) })
+db.on('connection', function(host, port){ console.log('connect', host, port) })
+db.on('error', function(err){ console.log('error', err) })
+
 ```
 
 ### Server 3...
@@ -33,6 +67,11 @@ db.put('some-key', 'some-value', function(err) {
 ```js
 var level = require('level')
 var replicate = require('level-replicator')
+
+var levelConfig = { // level configuration object }
+
+// any port
+var replicationConfig = { port: 9000, host: '127.0.0.1', peers: {} }
 
 var db = replicate(level('/tmp/db'))
 
